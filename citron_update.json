@@ -1,6 +1,6 @@
-﻿{
-    "version":  "9.8",
-    "url":  "https://raw.githubusercontent.com/TonCompte/citron/main/Citron.py",
-    "notes":  "affichée dans la fenêtre « Mise à jour disponible »",
-    "sha256":  "b81dab51ebdc802648ffd9978e0f7f18326b5d56100a84be67479356cd47d7e0"
+{
+    "version":  "9.7",
+    "url":  "https://raw.githubusercontent.com/Eric-65-eng/CITRON/refs/heads/main/Citron.py",
+    "notes":  "Alignement de la version",
+    "sha256":  "916c064f2146835f89105a77c42c32db1db03af850e2c4cb5895672c9f376cb9"
 }
