@@ -18,9 +18,35 @@ import ctypes
 import webbrowser
 import wave
 import hashlib
+import ssl
 from tkinter import filedialog, Listbox, END, Scrollbar, messagebox, Menu, Canvas
 from datetime import datetime
 from collections import Counter
+
+# ══════════════════════════════════════════════════════════════════
+# ── 🔒 Certificats HTTPS (toutes les requêtes urllib.request) ───────
+# ══════════════════════════════════════════════════════════════════
+# Sur certaines installations Windows, le magasin de certificats système
+# est incomplet (certificat intermédiaire manquant) : urllib.request
+# échoue alors sur CHAQUE requête HTTPS avec une erreur du style
+# "[SSL: CERTIFICATE_VERIFY_FAILED] ... unable to get issuer certificate",
+# même quand le site visé (GitHub, AlloCiné, TMDB...) n'a rigoureusement
+# rien d'anormal. Le paquet "certifi" fournit un jeu de certificats
+# fiable et à jour, indépendant du magasin Windows local — on l'utilise
+# ici pour TOUTES les requêtes HTTPS de Citron (urllib.request.urlopen
+# sans "context=" explicite s'appuie sur ce contexte par défaut), ce qui
+# évite d'avoir à corriger ce point site par site.
+# Si "certifi" n'est pas installé, on se rabat silencieusement sur le
+# comportement par défaut (celui d'avant ce correctif) : aucune
+# régression, juste pas de correctif tant qu'il n'est pas disponible
+# ("pip install certifi" dans l'environnement Python de Citron).
+try:
+    import certifi
+    ssl._create_default_https_context = lambda: ssl.create_default_context(cafile=certifi.where())
+    print("[TLS] certifi utilisé pour les vérifications de certificat HTTPS")
+except ImportError:
+    print("[TLS] certifi non installé — certificats HTTPS vérifiés via le magasin système "
+          "(pip install certifi pour corriger d'éventuelles erreurs SSL)")
 
 # ══════════════════════════════════════════════════════════════════
 # ── 🛟 Filet de sécurité au chargement de customtkinter / vlc ────────
@@ -466,7 +492,7 @@ ALL_EXT    = AUDIO_EXT | VIDEO_EXT
 
 # ── Version & vérification de mise à jour ────────────────────────────
 # À incrémenter manuellement à chaque nouvelle version distribuée.
-CITRON_VERSION = "1.0.0"
+CITRON_VERSION = "9.7"
 
 # URL d'un petit fichier JSON à héberger quelque part (page perso, fichier
 # "brut" d'un dépôt GitHub, etc.), de la forme :
@@ -486,7 +512,7 @@ CITRON_VERSION = "1.0.0"
 # PAS, Citron refuse carrément de proposer ce fichier. Sans "sha256", le
 # comportement reste celui d'avant (simple lien ouvert dans le navigateur,
 # sans garantie d'intégrité).
-CITRON_UPDATE_CHECK_URL = None
+CITRON_UPDATE_CHECK_URL = "https://raw.githubusercontent.com/Eric-65-eng/CITRON/refs/heads/main/citron_update.json"
 
 
 class _StdoutTee:
@@ -5714,7 +5740,7 @@ try:
                     req = urllib.request.Request(
                         CITRON_UPDATE_CHECK_URL, headers={"User-Agent": "Citron"})
                     with urllib.request.urlopen(req, timeout=6) as resp:
-                        data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                        data = json.loads(resp.read().decode("utf-8-sig", errors="ignore"))
                     remote_version = str(data.get("version", "")).strip()
                     if not remote_version:
                         raise ValueError("Réponse sans champ 'version'")
@@ -8718,7 +8744,7 @@ try:
                     req = urllib.request.Request(
                         CITRON_UPDATE_CHECK_URL, headers={"User-Agent": "Citron"})
                     with urllib.request.urlopen(req, timeout=6) as resp:
-                        data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                        data = json.loads(resp.read().decode("utf-8-sig", errors="ignore"))
                     remote_version = str(data.get("version", "")).strip()
                     if not remote_version:
                         raise ValueError("Réponse sans champ 'version'")
