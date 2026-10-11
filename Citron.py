@@ -404,11 +404,24 @@ def win_native_show(win, x, y):
         HWND_TOPMOST = -1
         SWP_NOACTIVATE = 0x0010
         SWP_SHOWWINDOW = 0x0040
-        w = win.winfo_reqwidth()
-        h = win.winfo_reqheight()
+        _fixe = getattr(win, "_citron_fixed_px", None)   # taille verrouillée (vignettes)
+        if _fixe:
+            w, h = _fixe
+        else:
+            w = win.winfo_reqwidth()
+            h = win.winfo_reqheight()
+        _flags = SWP_NOACTIVATE | SWP_SHOWWINDOW
+        if _fixe:
+            try:
+                import ctypes.wintypes as _wt
+                _r = _wt.RECT()
+                if ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(_r)) and \
+                        (_r.right - _r.left, _r.bottom - _r.top) == (int(w), int(h)):
+                    _flags |= 0x0001      # SWP_NOSIZE : on déplace seulement, sans redimensionner
+            except Exception:
+                pass
         ok = ctypes.windll.user32.SetWindowPos(
-            hwnd, HWND_TOPMOST, int(x), int(y), int(w), int(h),
-            SWP_NOACTIVATE | SWP_SHOWWINDOW)
+            hwnd, HWND_TOPMOST, int(x), int(y), int(w), int(h), _flags)
         if not ok:
             err = ctypes.get_last_error()
             print(f"[Vignette] SetWindowPos a échoué (hwnd={hwnd}, x={x}, y={y}, GetLastError={err})")
@@ -449,10 +462,20 @@ def force_redraw_region(x, y, w, h):
 # ── DPI awareness : à déclarer AVANT toute création de fenêtre Tk ───
 set_process_dpi_aware()
 
+# ══════════════════════════════════════════════════════════════════
+# 🍋 VERSION DE CITRON — SEUL ENDROIT À MODIFIER
+# Ce numéro est repris automatiquement partout : titre de la fenêtre,
+# bandeau en haut de l'écran, journal de démarrage, mode d'emploi,
+# vérification de mise à jour et User-Agent des requêtes internet.
+# Exemple : CITRON_VERSION = "9.8"
+# (penser à mettre le même numéro dans citron_update.json sur GitHub)
+# ══════════════════════════════════════════════════════════════════
+CITRON_VERSION = "9.8"
+
 log_file = "erreur_citron.log"
 with open(log_file, "w", encoding="utf-8") as f:
-    f.write(f"=== Démarrage Citron v9.7 - {datetime.now()} ===\n\n")
-print("=== Démarrage Citron v9.7 ===")
+    f.write(f"=== Démarrage Citron v{CITRON_VERSION} - {datetime.now()} ===\n\n")
+print(f"=== Démarrage Citron v{CITRON_VERSION} ===")
 print("[BUILD] Fix: erreur 'step' MCI +menu voix au-dessus (2026-07-20)")
 print("[BUILD] Fix: menu 'Aller sur internet' fenêtre fantôme (2026-08-06)")
 print("[BUILD] Compléter le tableur : réutilise le téléchargement de la simulation lors de "
@@ -469,6 +492,37 @@ print("[BUILD] Recherche : cascade tv-programme.com -> AlloCine -> SensCritique 
       "resultat est deja complet ; AlloCine/SensCritique/Plansamericains examinent "
       "jusqu'a 3 fiches candidates pour departager les films homonymes par annee "
       "au lieu de renseigner au hasard (2026-09-25)")
+print("[BUILD] Compléter le tableur : pour Film / Films d'animation, recherche PAS A PAS "
+      "(une source par clic sur Rechercher : tv-programme.com -> AlloCine -> SensCritique -> "
+      "Plansamericains -> TMDB -> IA, uniquement pour les champs restes vides) + affiche "
+      "AlloCine recuperee comme a la main (image 'poster du film Bande-annonce', adresse "
+      "reelle de l'image) (2026-10-04)")
+print("[BUILD] Recherche : DuckDuckGo plus robuste (en-tetes de navigateur, repli sur la "
+      "version lite, 2 tentatives, detection du blocage anti-robot) + raison de l'echec "
+      "affichee dans « Compléter le tableur » en mode pas a pas (2026-10-04)")
+print("[BUILD] Recherche de fiches : DuckDuckGo bloque (HTTP 202) -> mis de cote 10 min, "
+      "moteurs de secours Bing puis Mojeek ; message d'etat de « Compléter le tableur » "
+      "selectionnable/copiable (Ctrl+C, clic droit) (2026-10-04)")
+print("[BUILD] Recherche de fiches : moteurs de secours (Bing/Mojeek/Brave) avec « site: » "
+      "limite au nom de domaine + variante sans operateur + diagnostic detaille de la page "
+      "recue (2026-10-04)")
+print("[BUILD] Tableur de secours (copie) sélectionné via 🗂 Tableur : validation, Modification tableur et "
+      "coupure du lien (2026-10-11)")
+print("[BUILD] Recherches : TMDB en premier pour toutes les catégories (affiche, bande-annonce, durée, "
+      "synopsis, type, année) ; ⚙ Paramètres → « 🌐 Sites de recherches » : ordre/ajout/suppression des "
+      "sites par catégorie (2026-10-11)")
+print("[BUILD] Compléter le tableur : case « Pièce de théâtre » -> champs renommés "
+      "(Comédiens / Mise en scène), recherche pas à pas TPA > Les Archives du spectacle > SensCritique > TheatreOnline > Offi "
+      "(résumé, comédiens, mise en scène, année, affiche) puis bande-annonce YouTube "
+      "« Bande annonce de la pièce de théâtre ... » ; copier/coller dans « Renseignements "
+      "divers » et « Préciser la catégorie » (2026-10-09)")
+print("[BUILD] Recherche de fiches : liens de suivi Bing relatifs (/ck/a) decodes, adresses "
+      "en clair detectees, moteurs en captcha/429 mis de cote 10 min (2026-10-04)")
+print("[BUILD] AlloCine : si aucun moteur de recherche ne repond, l'adresse de la fiche est "
+      "retrouvee via Wikidata (identifiant AlloCine, adresse seule, infos lues sur AlloCine) "
+      "(2026-10-04)")
+print("[BUILD] Cle API TMDB / IA : copier-coller (Ctrl+V, Ctrl+C, clic droit) active dans les "
+      "champs de saisie (2026-10-04)")
 print("[BUILD] Envoi TV (DLNA) : message final explicite si le boîtier reste bloqué en "
       "TRANSITIONING malgré des relances de Play (état DLNA interne figé côté "
       "renderer, typique après une coupure réseau) -> conseille un débranchement/"
@@ -487,12 +541,11 @@ print("[BUILD] Capture d'écran : tente désormais ddagrab (Desktop Duplication 
       "un écran secondaire (2026-09-26)")
 
 AUDIO_EXT = {'.mp3', '.flac', '.ogg', '.wav', '.aac', '.wma', '.m4a', '.opus'}
-VIDEO_EXT  = {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv'}
+VIDEO_EXT  = {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.ts', '.mts'}
 ALL_EXT    = AUDIO_EXT | VIDEO_EXT
 
 # ── Version & vérification de mise à jour ────────────────────────────
-# À incrémenter manuellement à chaque nouvelle version distribuée.
-CITRON_VERSION = "9.7"
+# CITRON_VERSION est défini tout en haut du fichier (« VERSION DE CITRON »).
 
 # URL d'un petit fichier JSON à héberger quelque part (page perso, fichier
 # "brut" d'un dépôt GitHub, etc.), de la forme :
@@ -783,7 +836,7 @@ class VideoHTTPHandler(http.server.BaseHTTPRequestHandler):
     server_remote_mime = None
     MIME = {
         ".mp4":"video/mp4", ".mkv":"video/x-matroska", ".avi":"video/x-msvideo",
-        ".mov":"video/quicktime", ".wmv":"video/x-ms-wmv", ".flv":"video/x-flv",
+        ".mov":"video/quicktime", ".wmv":"video/x-ms-wmv", ".flv":"video/x-flv", ".ts":"video/mp2t", ".mts":"video/mp2t",
         ".mp3":"audio/mpeg", ".flac":"audio/flac", ".ogg":"audio/ogg",
         ".wav":"audio/wav", ".aac":"audio/aac", ".m4a":"audio/mp4",
     }
@@ -986,7 +1039,7 @@ def _mime_for_url(url):
     ext = os.path.splitext(url.split("?")[0])[1].lower()
     return {
         ".mp4":"video/mp4", ".mkv":"video/x-matroska", ".avi":"video/x-msvideo",
-        ".mov":"video/quicktime", ".wmv":"video/x-ms-wmv", ".flv":"video/x-flv",
+        ".mov":"video/quicktime", ".wmv":"video/x-ms-wmv", ".flv":"video/x-flv", ".ts":"video/mp2t", ".mts":"video/mp2t",
         ".mp3":"audio/mpeg", ".flac":"audio/flac", ".ogg":"audio/ogg",
         ".wav":"audio/wav", ".aac":"audio/aac", ".m4a":"audio/mp4",
     }.get(ext, "video/mp4")
@@ -1218,7 +1271,7 @@ try:
     class CitronVideoPlayer(ctk.CTk):
         def __init__(self):
             super().__init__()
-            self.title("🍋 Citron v9.7 - Lecteur Vidéo")
+            self.title(f"🍋 Citron v{CITRON_VERSION} - Lecteur Vidéo")
 
             # Filet de sécurité : une exception levée dans un callback Tk
             # (ex : opération sur une fenêtre déjà détruite suite à des
@@ -1374,6 +1427,9 @@ try:
             self.completer_tableur_win_geometry = None
             self._tmdb_api_key = ""
             self._ia_api_key = ""
+            self._search_sites_cfg = {}      # catégorie -> [ids de sites] (⚙ Sites de recherches)
+            self._search_sites_custom = []   # sites ajoutés à la main [{id, nom, url}]
+            self._tableur_secours_path = ""  # 2e tableur .ods : copie de secours (vide = désactivée)
             self._ia_api_base = "https://api.openai.com/v1"
             self._ia_model = "gpt-4o-mini"
             self._dernier_dossier_affiches = ""
@@ -1409,7 +1465,7 @@ try:
             self._countdown_loop()
             self._audio_level_loop()
             self._start_cmd_server()
-            print("✅ Citron v9.7 démarré avec succès")
+            print(f"✅ Citron v{CITRON_VERSION} démarré avec succès")
 
         def init_vlc(self):
             try:
@@ -1530,6 +1586,11 @@ try:
                 self.completer_tableur_win_geometry = d.get("completer_tableur_win", None)
                 self._tmdb_api_key = d.get("tmdb_api_key", "")
                 self._ia_api_key = d.get("ia_api_key", "")
+                _ss = d.get("search_sites", {})
+                self._search_sites_cfg = _ss if isinstance(_ss, dict) else {}
+                _sc = d.get("search_sites_custom", [])
+                self._search_sites_custom = _sc if isinstance(_sc, list) else []
+                self._tableur_secours_path = d.get("tableur_secours_path", "") or ""
                 self._ia_api_base = d.get("ia_api_base", "https://api.openai.com/v1")
                 self._ia_model = d.get("ia_model", "gpt-4o-mini")
                 self._dernier_dossier_affiches = d.get("dernier_dossier_affiches", "")
@@ -1564,6 +1625,9 @@ try:
                      "completer_tableur_win": getattr(self, "completer_tableur_win_geometry", None),
                      "tmdb_api_key": getattr(self, "_tmdb_api_key", ""),
                      "ia_api_key": getattr(self, "_ia_api_key", ""),
+                     "search_sites": getattr(self, "_search_sites_cfg", {}),
+                     "search_sites_custom": getattr(self, "_search_sites_custom", []),
+                     "tableur_secours_path": getattr(self, "_tableur_secours_path", ""),
                      "ia_api_base": getattr(self, "_ia_api_base", "https://api.openai.com/v1"),
                      "ia_model": getattr(self, "_ia_model", "gpt-4o-mini"),
                      "dernier_dossier_affiches": getattr(self, "_dernier_dossier_affiches", ""),
@@ -1708,7 +1772,7 @@ try:
 
         # ── Widgets ─────────────────────────────────────
         def create_widgets(self):
-            ctk.CTkLabel(self, text="🍋 Citron v9.7", font=("Arial",22,"bold")).pack(pady=(8,0))
+            ctk.CTkLabel(self, text=f"🍋 Citron v{CITRON_VERSION}", font=("Arial",22,"bold")).pack(pady=(8,0))
 
             self.video_frame = ctk.CTkFrame(self, fg_color="black", corner_radius=0)
             self.video_frame.pack(fill="both", expand=True, padx=10, pady=(6,0))
@@ -1762,6 +1826,18 @@ try:
             self._list_thumb_ready_at = 0
             self._list_thumb_ready_job = None
             self._list_thumb_first_hover_done = True
+            # Vignettes fluides (liste + barre de progression)
+            from collections import OrderedDict as _OD
+            self._thumb_cache = _OD()           # mémoire des images déjà capturées (LRU)
+            self._thumb_cache_key = None
+            self._thumb_pending = None          # dernière position demandée (la seule qui compte)
+            self._thumb_inflight = False        # une capture ffmpeg est en cours
+            self._thumb_inflight_since = 0
+            self._thumb_last_key = None         # dernière image demandée/affichée
+            self._thumb_req_path = None
+            self._thumb_owner = None            # qui a demandé l'affichage de la vignette : 'list', 'bar' ou None
+            self._thumb_last_rect = None         # dernier rectangle écran occupé par la vignette (pour le redessin)
+            self._list_thumb_watchdog_job = None # surveillance anti-fantôme de la liste
 
             # Barre contrôles
             ctrl = ctk.CTkFrame(self, height=54)
@@ -1916,6 +1992,7 @@ try:
             items = [
                 ("📖 Mode d'emploi", self._show_help),
                 ("🎙️ Voix du résumé", lambda: self._show_voice_menu(anchor_btn)),
+                ("🌐 Sites de recherches", self._show_sites_recherche_window),
                 ("🔗 Activer citron:// (navigateur)", self.register_citron_protocol),
                 ("🔎 Vérifier les mises à jour", lambda: self._check_for_update(silent=False)),
                 ("📦 Exporter ma configuration", self.export_library_backup),
@@ -2749,19 +2826,82 @@ try:
             # et de la cacher plus loin — d'où le flash observé au lancement
             # d'une vidéo (la fenêtre est maintenant créée par anticipation).
             self._thumb_win.withdraw()
+            # CTkToplevel pose son icône 200 ms APRÈS sa création (iconbitmap) : Tk
+            # reconstruit alors la fenêtre Windows sous-jacente. Si la vignette est
+            # affichée à ce moment-là, l'ancienne fenêtre est détruite en laissant son
+            # image à l'écran (fantôme impossible à masquer). On neutralise ce réglage.
+            try: self._thumb_win._iconbitmap_method_called = True
+            except Exception: pass
             self._thumb_win.wm_overrideredirect(True)
             self._thumb_win.attributes("-topmost", True)
             self._thumb_win.update_idletasks()
             win_make_layered(self._thumb_win)
             win_native_hide(self._thumb_win)
+            # Fond de la fenêtre = couleur du cadre, et cadre qui REMPLIT la fenêtre :
+            # si la fenêtre fait 1-2 pixels de plus ou de moins que ce que le cadre
+            # « demande » (arrondis liés à la mise à l'échelle Windows), plus aucune bande
+            # d'une autre couleur n'apparaît ou ne disparaît sur le bord droit.
+            try: self._thumb_win.configure(fg_color="#222222")
+            except Exception: pass
             frame = ctk.CTkFrame(self._thumb_win, fg_color="#222222", corner_radius=6)
-            frame.pack()
+            frame.pack(fill="both", expand=True)
             self._thumb_img_lbl = ctk.CTkLabel(frame, text="", fg_color="#000000",
                                                 corner_radius=4, width=176, height=99)
             self._thumb_img_lbl.pack(padx=6, pady=(6,2))
             self._thumb_lbl = ctk.CTkLabel(frame, text="", font=("Arial",11), text_color="#ffffff")
             self._thumb_lbl.pack(padx=6, pady=(0,6))
             self._thumb_current_path = None  # nouvelle fenêtre -> forcer le rechargement de l'image
+            self._thumb_locked_key = None    # nouvelle fenêtre -> taille à re-verrouiller
+
+        def _lock_thumb_size(self, img_w, img_h):
+            """Fige la taille de la fenêtre vignette (bord droit stable).
+
+            Avant, la taille de la fenêtre suivait la taille « demandée » par ses widgets
+            à chaque déplacement ; la moindre variation de quelques pixels (texte du temps
+            ou du titre, image qui se remplace) redimensionnait la fenêtre et le bord
+            droit tremblait. Ici la largeur du texte est fixée à celle de l'image, puis la
+            taille de la fenêtre est mesurée UNE fois par format (liste / barre) et
+            réutilisée telle quelle ensuite."""
+            try:
+                key = (int(img_w), int(img_h))
+                if getattr(self, "_thumb_locked_key", None) == key:
+                    return
+                # Changement de format (liste <-> barre) : l'ancienne image, plus grande ou
+                # plus petite, reste dans le widget et impose SA taille à la fenêtre (zone
+                # grise autour de la bonne miniature). On la remplace d'abord par un
+                # fond noir exactement à la taille du nouveau format, puis on mesure.
+                try:
+                    from PIL import Image as _PILImage
+                    _vide = _PILImage.new("RGB", (int(img_w), int(img_h)), (0, 0, 0))
+                    _vide_ctk = ctk.CTkImage(light_image=_vide, dark_image=_vide,
+                                             size=(int(img_w), int(img_h)))
+                    self._thumb_img_lbl.configure(image=_vide_ctk, text="",
+                                                  width=int(img_w), height=int(img_h))
+                    self._thumb_img_lbl.image = _vide_ctk
+                except Exception as ex:
+                    print(f"[Vignette] fond neutre : {ex}")
+                self._thumb_lbl.configure(width=int(img_w))
+                self._thumb_win.update_idletasks()
+                w = int(self._thumb_win.winfo_reqwidth())
+                h = int(self._thumb_win.winfo_reqheight())
+                self._thumb_win._citron_fixed_px = (w, h)
+                self._thumb_locked_key = key
+                # Géométrie explicite côté Tk (pixels réels, sans passer par la mise à
+                # l'échelle de customtkinter) : tant que Tk n'a pas de taille imposée, il
+                # redimensionne la fenêtre à chaque changement d'image (instant variable,
+                # donc au beau milieu des déplacements), puis notre positionnement natif
+                # la redimensionne à son tour : la fenêtre « bat » entre deux largeurs.
+                import tkinter as _tk
+                _tk.Wm.wm_geometry(self._thumb_win, f"{w}x{h}")
+            except Exception as ex:
+                print(f"[Vignette] verrouillage de taille : {ex}")
+
+        def _thumb_px_size(self):
+            """Taille réelle (pixels) de la fenêtre vignette : verrouillée si possible."""
+            fixe = getattr(self._thumb_win, "_citron_fixed_px", None)
+            if fixe:
+                return fixe
+            return self._thumb_win.winfo_reqwidth(), self._thumb_win.winfo_reqheight()
 
         def _hide_thumb_win(self):
             """Cache la vignette. Toujours sûr à appeler, y compris si rien n'est affiché."""
@@ -2771,6 +2911,10 @@ try:
             except Exception:
                 pass
             self._thumb_hover_job = None
+            self._thumb_owner = None
+            self._thumb_pending = None
+            self._thumb_last_key = None
+            self._thumb_req_path = None
             self._thumb_seek_gen += 1  # invalide toute capture en cours ou en attente d'affichage
             try:
                 if self._thumb_win and self._thumb_win.winfo_exists():
@@ -2780,6 +2924,15 @@ try:
                     h = self._thumb_win.winfo_height()
                     win_native_hide(self._thumb_win)
                     force_redraw_region(x, y, w, h)
+            except Exception:
+                pass
+            # Redessiner aussi la zone où la vignette a RÉELLEMENT été posée
+            # (SetWindowPos), qui peut différer de la position connue de Tk.
+            try:
+                rect = getattr(self, "_thumb_last_rect", None)
+                if rect:
+                    force_redraw_region(*rect)
+                self._thumb_last_rect = None
             except Exception:
                 pass
 
@@ -2811,6 +2964,7 @@ try:
                 self._ensure_thumb_win()
                 try:
                     self._thumb_img_lbl.configure(width=176, height=99)
+                    self._lock_thumb_size(176, 99)
                 except Exception:
                     pass
 
@@ -2821,8 +2975,7 @@ try:
 
                 # Position au-dessus du curseur, en coordonnées écran réelles
                 self._thumb_win.update_idletasks()
-                tw = self._thumb_win.winfo_reqwidth()
-                th = self._thumb_win.winfo_reqheight()
+                tw, th = self._thumb_px_size()
                 screen_w = self.progress_slider.winfo_screenwidth()
                 margin = 10
                 rx = self.progress_slider.winfo_rootx() + event.x
@@ -2836,15 +2989,12 @@ try:
                 # reste préparé normalement ci-dessus ; seul l'affichage visuel
                 # est différé de quelques instants au tout début d'une lecture.
                 if time.time() >= self._thumb_win_ready_at:
+                    self._thumb_owner = "bar"
                     win_native_show(self._thumb_win, x, y)
 
                 # Image : débounce pour ne pas déclencher une capture VLC à chaque pixel
                 if path and os.path.isfile(path):
-                    if self._thumb_hover_job:
-                        try: self.after_cancel(self._thumb_hover_job)
-                        except Exception: pass
-                    self._thumb_hover_job = self.after(
-                        150, lambda p=path, ms=pos_ms: self._update_thumb_image(p, ms))
+                    self._request_thumb(path, pos_ms, tot, (176, 99))
             except Exception as ex:
                 print(f"[Vignette] Erreur survol : {ex}")
 
@@ -2911,6 +3061,81 @@ try:
                 print(f"[Vignette] Initialisation impossible : {ex}")
                 self._thumb_vlc_player = None
 
+        def _request_thumb(self, path, pos_ms, dur_ms, thumb_size):
+            """Demande d'une vignette pendant que la souris BOUGE (liste ou barre).
+
+            Avant : un « débounce » repoussait la capture à chaque mouvement, donc rien
+            ne changeait tant que la souris n'était pas arrêtée. Maintenant :
+              - une seule capture ffmpeg à la fois, et dès qu'elle finit on relance
+                tout de suite avec la position LA PLUS RÉCENTE (l'image suit la souris) ;
+              - la position est arrondie (≈1 % de la durée, 1 s minimum) : pas de capture
+                inutile pour quelques pixels de différence ;
+              - les images déjà capturées sont gardées en mémoire (retour instantané
+                quand on repasse au même endroit)."""
+            if not self._get_ffmpeg_path():
+                # Secours VLC : ancien comportement (débounce)
+                try:
+                    if self._thumb_hover_job: self.after_cancel(self._thumb_hover_job)
+                except Exception: pass
+                self._thumb_hover_job = self.after(
+                    150, lambda p=path, ms=pos_ms, sz=thumb_size: self._update_thumb_image(p, ms, sz))
+                return
+            step = max(1000, int(dur_ms // 120)) if dur_ms and dur_ms > 0 else 1000
+            q = (int(pos_ms) // step) * step
+            key = (path, tuple(thumb_size), q)
+            self._thumb_pending = (path, q, tuple(thumb_size), key)
+            meme_titre = (path == self._thumb_req_path)
+            self._thumb_req_path = path
+            if meme_titre:
+                self._thumb_try_dispatch()          # même titre : réaction immédiate
+            else:
+                try:
+                    if self._thumb_hover_job: self.after_cancel(self._thumb_hover_job)
+                except Exception: pass
+                # nouveau titre : très court délai pour ne pas capturer les lignes
+                # simplement traversées en descendant la liste
+                self._thumb_hover_job = self.after(80, self._thumb_try_dispatch)
+
+        def _thumb_try_dispatch(self):
+            self._thumb_hover_job = None
+            req = self._thumb_pending
+            if not req:
+                return
+            path, q, size, key = req
+            img = self._thumb_cache.get(key)
+            if img is not None:                      # déjà capturée : affichage instantané
+                self._thumb_cache.move_to_end(key)
+                self._thumb_pending = None
+                self._thumb_last_key = key
+                self._show_thumb_cached(img)
+                return
+            if key == self._thumb_last_key:          # même image que celle déjà affichée
+                self._thumb_pending = None
+                return
+            if self._thumb_inflight and (time.time() - self._thumb_inflight_since) < 10:
+                return                               # _thumb_capture_done relancera
+            self._thumb_pending = None
+            self._thumb_last_key = key
+            self._thumb_cache_key = key
+            self._update_thumb_image(path, q, size)
+
+        def _thumb_capture_done(self):
+            """Fin d'une capture ffmpeg : relance avec la position la plus récente."""
+            self._thumb_inflight = False
+            if self._thumb_pending:
+                self._thumb_try_dispatch()
+
+        def _show_thumb_cached(self, img):
+            try:
+                if not (self._thumb_win and self._thumb_win.winfo_exists()):
+                    return
+                ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=img.size)
+                self._thumb_img_lbl.configure(image=ctk_img, text="")
+                self._thumb_img_lbl.image = ctk_img
+                self._thumb_img_lbl.update_idletasks()
+            except Exception as ex:
+                print(f"[Vignette] Erreur affichage (cache) : {ex}")
+
         def _update_thumb_image(self, path, pos_ms, thumb_size=(176, 99)):
             """Capture une image du média à la position donnée."""
             self._thumb_hover_job = None
@@ -2921,15 +3146,25 @@ try:
 
             ffmpeg_path = self._get_ffmpeg_path()
             if ffmpeg_path:
-                self._capture_thumb_ffmpeg(ffmpeg_path, path, pos_ms, my_gen, thumb_size)
+                self._thumb_inflight = True
+                self._thumb_inflight_since = time.time()
+                self._capture_thumb_ffmpeg(ffmpeg_path, path, pos_ms, my_gen, thumb_size,
+                                           cache_key=self._thumb_cache_key)
+                self._thumb_cache_key = None
                 return
             self._capture_thumb_vlc(path, pos_ms, my_gen, thumb_size)
 
-        def _capture_thumb_ffmpeg(self, ffmpeg_path, path, pos_ms, my_gen, thumb_size=(176, 99)):
+        def _capture_thumb_ffmpeg(self, ffmpeg_path, path, pos_ms, my_gen, thumb_size=(176, 99), cache_key=None):
             """Capture via un processus ffmpeg indépendant : rapide, jetable, et sans
             aucun lien avec le sous-système audio (contrairement à un second lecteur
             VLC, qui pouvait couper le son du lecteur principal pendant le survol)."""
             def worker():
+                try:
+                    _work()
+                finally:
+                    try: self.after(0, self._thumb_capture_done)
+                    except Exception: pass
+            def _work():
                 tmp_path = os.path.join(tempfile.gettempdir(),
                                          f"citron_thumb_ff_{os.getpid()}_{my_gen}.png")
                 try:
@@ -2940,8 +3175,12 @@ try:
                     # "-ss" AVANT "-i" : seek rapide côté démuxeur (quasi instantané),
                     # bien plus rapide qu'ouvrir/décoder depuis le début du fichier.
                     tw, th = thumb_size
-                    cmd = [ffmpeg_path, "-y", "-ss", f"{target_s:.3f}", "-i", path,
-                           "-frames:v", "1", "-vf", f"scale={int(tw)}:{int(th)}", tmp_path]
+                    # "-noaccurate_seek" : on prend l'image clé la plus proche au lieu de
+                    # décoder jusqu'à l'instant exact -> bien plus rapide (inutile ici).
+                    cmd = [ffmpeg_path, "-hide_banner", "-loglevel", "error", "-y",
+                           "-noaccurate_seek", "-ss", f"{target_s:.3f}", "-i", path,
+                           "-an", "-sn", "-frames:v", "1",
+                           "-vf", f"scale={int(tw)}:{int(th)}", tmp_path]
                     creationflags = no_console_flags()
                     result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                                              timeout=8, creationflags=creationflags)
@@ -2957,7 +3196,7 @@ try:
                             pass
                         return
                     if exists and size > 0:
-                        self.after(0, lambda: self._show_thumb_image(tmp_path, my_gen))
+                        self.after(0, lambda: self._show_thumb_image(tmp_path, my_gen, cache_key))
                     else:
                         err = (result.stderr or b"").decode(errors="ignore")[-300:]
                         print(f"[Vignette] gen={my_gen} : échec ffmpeg : {err}")
@@ -3090,7 +3329,7 @@ try:
                     self._thumb_lock.release()
             threading.Thread(target=worker, daemon=True).start()
 
-        def _show_thumb_image(self, tmp_path, gen=None):
+        def _show_thumb_image(self, tmp_path, gen=None, cache_key=None):
             """Affiche l'image capturée dans la fenêtre de vignette (thread principal)."""
             try:
                 # ── Revérification de la génération AU MOMENT DE L'AFFICHAGE ──
@@ -3133,6 +3372,7 @@ try:
                     pass
                 from PIL import Image
                 img = Image.open(tmp_path)
+                img.load()   # lecture complète : le fichier temporaire pourra être supprimé
                 # CTkImage (et non PIL.ImageTk.PhotoImage brut) : customtkinter gère
                 # alors correctement le rafraîchissement de l'affichage sur les
                 # écrans avec mise à l'échelle Windows (125%, 150%...). Un
@@ -3154,6 +3394,13 @@ try:
                 except Exception:
                     pass
                 print(f"[Vignette] gen={gen} : image affichée avec succès (taille={img.size})")
+                if cache_key is not None:
+                    try:
+                        self._thumb_cache[cache_key] = img.copy()
+                        while len(self._thumb_cache) > 60:      # mémoire bornée (LRU)
+                            self._thumb_cache.popitem(last=False)
+                    except Exception:
+                        pass
                 # Nettoyer l'ancien fichier temporaire (on ne garde que le dernier affiché)
                 old_tmp = self._thumb_last_tmp_path
                 self._thumb_last_tmp_path = tmp_path
@@ -6985,8 +7232,66 @@ try:
                 pass
             self._list_thumb_ready_job = self.list_win.after(2000, self._list_thumb_ready)
 
+            # Création ANTICIPÉE (et masquée) de la fenêtre vignette dès l'ouverture de
+            # la liste, pour qu'elle soit « installée » bien avant le premier survol.
+            try:
+                _neuve = not (self._thumb_win is not None and self._thumb_win.winfo_exists())
+                self._ensure_thumb_win()
+                if _neuve:
+                    self._thumb_win_ready_at = time.time() + 1.5
+                self._hide_thumb_win()
+            except Exception as ex:
+                print(f"[Vignette liste] pré-création : {ex}")
+            # Surveillance anti-fantôme
+            try:
+                if self._list_thumb_watchdog_job:
+                    self.after_cancel(self._list_thumb_watchdog_job)
+            except Exception:
+                pass
+            self._list_thumb_watchdog_job = self.after(150, self._list_thumb_watchdog)
+
             self.list_win.after(120,lambda: self.list_win_listbox.yview_moveto(self.list_scroll_pos))
             self._remember_last_window_geometry(self.list_win)
+
+        def _list_thumb_watchdog(self):
+            """Filet de sécurité anti-fantôme (toutes les 150 ms tant que la liste est ouverte).
+
+            Si la vignette est visible alors qu'elle ne devrait pas l'être — la souris
+            n'est plus sur un titre de la liste (événement <Leave> manqué), ou personne
+            n'a demandé son affichage (fenêtre réaffichée toute seule par Tk/customtkinter)
+            — on la masque et on redessine la zone. La vignette de la barre de progression
+            (propriétaire « bar ») n'est jamais touchée."""
+            self._list_thumb_watchdog_job = None
+            try:
+                if not (self.list_win and self.list_win.winfo_exists()):
+                    return
+                try:
+                    if (IS_WINDOWS and self._thumb_win is not None and self._thumb_win.winfo_exists()):
+                        _hw = win_hwnd(self._thumb_win)
+                        visible = bool(_hw and ctypes.windll.user32.IsWindowVisible(_hw))
+                    else:
+                        visible = False
+                except Exception:
+                    visible = False
+                if visible and self._thumb_owner != "bar":
+                    lb = self.list_win_listbox
+                    dedans = False
+                    try:
+                        px, py = lb.winfo_pointerxy()
+                        x = px - lb.winfo_rootx(); y = py - lb.winfo_rooty()
+                        dedans = (0 <= x < lb.winfo_width() and 0 <= y < lb.winfo_height())
+                    except Exception:
+                        dedans = False
+                    if not (dedans and self._thumb_owner == "list" and self._list_hover_last_idx is not None):
+                        print("[Vignette liste] Watchdog : vignette orpheline masquée")
+                        self._hide_list_hover_thumb()
+            except Exception as ex:
+                print(f"[Vignette liste] watchdog : {ex}")
+            try:
+                if self.list_win and self.list_win.winfo_exists():
+                    self._list_thumb_watchdog_job = self.after(150, self._list_thumb_watchdog)
+            except Exception:
+                pass
 
         def _list_thumb_ready(self):
             """Autorise les vignettes après 2 s et traite le titre sous le pointeur."""
@@ -7086,8 +7391,27 @@ try:
                 self._hide_thumb_win()
                 return
 
+            # Fenêtre vignette inexistante (aucune vidéo lancée avant d'ouvrir la
+            # liste) : on la crée MAINTENANT mais on ne l'affiche jamais dans la
+            # foulée — une fenêtre Windows toute fraîche doit d'abord « s'installer »
+            # (c'est son tout premier affichage qui laissait les vignettes fantômes).
+            _fenetre_neuve = not (self._thumb_win is not None and self._thumb_win.winfo_exists())
             self._ensure_thumb_win()
+            if _fenetre_neuve:
+                self._thumb_win_ready_at = time.time() + 1.5
+            if time.time() < self._thumb_win_ready_at:
+                self._hide_thumb_win()
+                # Nouvel essai automatique dès que la fenêtre est prête (même si la
+                # souris reste immobile).
+                if not self._list_thumb_ready_job:
+                    try:
+                        _attente = int(max(0.0, self._thumb_win_ready_at - time.time()) * 1000) + 80
+                        self._list_thumb_ready_job = self.list_win.after(_attente, self._list_thumb_ready)
+                    except Exception:
+                        pass
+                return
             self._thumb_img_lbl.configure(width=528, height=297)
+            self._lock_thumb_size(528, 297)
             self._thumb_lbl.configure(
                 text=os.path.splitext(os.path.basename(path))[0][:55]
             )
@@ -7102,19 +7426,8 @@ try:
             self._list_hover_last_idx = idx
             self._list_hover_last_pos_ms = pos_ms
 
-            if self._thumb_hover_job:
-                try:
-                    self.after_cancel(self._thumb_hover_job)
-                except Exception:
-                    pass
-
-            # Même principe que le survol de la barre : petit débounce pour
-            # éviter une capture ffmpeg à chaque pixel.
-            self._thumb_hover_job = self.after(
-                120,
-                lambda p=path, ms=pos_ms:
-                    self._update_thumb_image(p, ms, (528, 297))
-            )
+            # Capture « au fil de la souris » (une à la fois, toujours la plus récente).
+            self._request_thumb(path, pos_ms, int(dur_s * 1000), (528, 297))
 
 
         def _reposition_list_hover_thumb(self, event):
@@ -7123,8 +7436,7 @@ try:
                 if not (self._thumb_win and self._thumb_win.winfo_exists()):
                     return
                 self._thumb_win.update_idletasks()
-                tw = self._thumb_win.winfo_reqwidth()
-                th = self._thumb_win.winfo_reqheight()
+                tw, th = self._thumb_px_size()
                 screen_w = self.list_win_listbox.winfo_screenwidth()
                 screen_h = self.list_win_listbox.winfo_screenheight()
                 margin = 10
@@ -7135,6 +7447,8 @@ try:
                 x = max(margin, rx)
                 y = max(margin, min(ry, screen_h - th - margin))
                 if time.time() >= self._list_thumb_ready_at:
+                    self._thumb_owner = "list"
+                    self._thumb_last_rect = (int(x), int(y), int(tw), int(th))
                     win_native_show(self._thumb_win, x, y)
             except Exception as ex:
                 print(f"[Vignette liste] Erreur positionnement : {ex}")
@@ -7157,6 +7471,12 @@ try:
             except Exception:
                 pass
             self._list_thumb_ready_job = None
+            try:
+                if self._list_thumb_watchdog_job:
+                    self.after_cancel(self._list_thumb_watchdog_job)
+            except Exception:
+                pass
+            self._list_thumb_watchdog_job = None
             self._hide_list_hover_thumb()
             if self.list_win:
                 self.list_win_geometry=self.list_win.geometry()
@@ -9052,7 +9372,50 @@ try:
 "au format Excel, ouvrez-le dans LibreOffice Calc (gratuit) et faites "
 "« Enregistrer sous » → format ODF Feuille de calcul (.ods).\n"
 "• Bouton « 🗂 Tableur » → menu avec : sélectionner votre fichier .ods, "
-"le modifier, le tester, ou couper le lien (🗂 off).\n"
+"sélectionner un tableur de secours (copie), le modifier, le tester, "
+"compléter le tableur, ou couper le lien (🗂 off).\n"
+"• 📂 Tableur de secours (copie) → choisissez à la main un second tableur \n"
+".ods (un fichier existant, ou un nouveau nom : il est alors créé par copie \n"
+"de votre tableur). Il sert de copie de secours : chaque validation dans \n"
+"« Compléter le tableur » y écrit aussi la même ligne ; « ✏️ Modification \n"
+"tableur » le met aussi à jour après chaque enregistrement (la version \n"
+"précédente de la copie est conservée à côté, « … (version précédente) », \n"
+"et la copie n'est jamais écrasée si votre tableur principal est \n"
+"illisible) ; « 🗂 off (couper le lien) » coupe aussi ce lien. La lecture, \n"
+"les fiches, les recherches et « 🧪 Test tableur » n'utilisent que le \n"
+"tableur principal. Si la copie échoue, votre tableur principal n'est \n"
+"jamais bloqué.\n"
+"• 🗂 Tableur → « 🌐 Compléter le tableur » : un formulaire (titre, année, \n"
+"résumé, acteurs, réalisateur, type, durée, affiche, bande-annonce, \n"
+"catégorie, renseignements divers) que Citron peut remplir pour vous en \n"
+"cherchant sur internet. Cochez d'abord la catégorie (Film, Pièce de \n"
+"théâtre, Films d'animation, Clip vidéo, Concert, Autre), saisissez le \n"
+"titre (et l'année si plusieurs œuvres portent le même titre), puis \n"
+"cliquez sur « 🔎 Rechercher ».\n"
+"   – La recherche va PAS À PAS : un clic = un site (le bouton indique \n"
+"le prochain). TMDB est interrogé en premier pour toutes les catégories \n"
+"(affiche, bande-annonce, durée, synopsis, type, année ; une clé API \n"
+"TMDB gratuite est nécessaire — bouton « 🔑 Clé API TMDB » du formulaire). \n"
+"Seuls les champs VIDES sont remplis : ce que vous avez saisi n'est \n"
+"jamais écrasé, et un champ effacé sera de nouveau recherché. Si le \n"
+"titre ou la catégorie change, la recherche repart du premier site.\n"
+"   – Catégorie « Pièce de théâtre » : « Acteurs » devient « Comédiens » \n"
+"(noms séparés par « / ») et « Réalisateur (Filmeur) » devient « Mise en \n"
+"scène ». Après TMDB, les sites sont : TPA (tpa.fr : résumé complet, \n"
+"comédiens, mise en scène, année de la dernière représentation, affiche), \n"
+"Les Archives du spectacle, SensCritique, TheatreOnline, puis Offi. La \n"
+"bande-annonce est cherchée sur YouTube (« Bande annonce de la pièce de \n"
+"théâtre … ») si TMDB n'en a pas fourni.\n"
+"   – Les champs « Renseignements divers » et « Préciser la catégorie » \n"
+"acceptent le copier/coller (Ctrl+C / Ctrl+V / Ctrl+X, clic droit).\n"
+"   – « ✅ Valider » : l'affiche et la bande-annonce sont téléchargées \n"
+"(vous choisissez les dossiers), puis la fiche est écrite dans le tableur \n"
+"(.ods) : la ligne du même titre est mise à jour, sinon une ligne est \n"
+"ajoutée à la fin. Les textes sont inscrits en texte brut, sans mise en \n"
+"forme venue d'internet ; l'affiche et la bande-annonce sont des liens \n"
+"vers les fichiers enregistrés. Si un tableur de secours est configuré \n"
+"(🗂 Tableur → « 📂 Tableur de secours (copie) »), la même ligne est \n"
+"aussi écrite dans ce second tableur.\n"
 "• Clic droit sur un titre de la bibliothèque → « 📋 Infos (tableur) » → "
 "ouvre sa fiche : résumé, éventuellement une courte vidéo-résumé (🎞) que "
 "vous pouvez lancer, et un bouton pour faire LIRE le résumé à voix haute "
@@ -9111,6 +9474,13 @@ try:
 "vidéo depuis votre navigateur (voir section Internet ci-dessus).\n"
 "• 🔎 Vérifier les mises à jour → contrôle si une nouvelle version de "
 "Citron est disponible.\n"
+"• 🌐 Sites de recherches → choisissez, pour CHAQUE catégorie de « Compléter \n"
+"le tableur », les sites interrogés et leur ordre : ▲ ▼ pour changer \n"
+"l'ordre, ✖ pour retirer un site, « ➕ Ajouter » pour remettre un site \n"
+"connu, « 🔗 Autre site… » pour ajouter l'adresse d'un site de votre choix, \n"
+"« ↺ Ordre par défaut » pour tout rétablir, et 🌐 pour ouvrir le site dans \n"
+"votre navigateur et l'utiliser à la main. Les changements sont \n"
+"enregistrés aussitôt et valent dès la recherche suivante.\n"
 "• 📦 Exporter ma configuration / 📥 Importer une configuration → "
 "sauvegarder ou restaurer d'un coup votre bibliothèque, votre playlist et "
 "le lien vers votre tableur — très utile avant une réinstallation ou un "
@@ -9153,12 +9523,15 @@ try:
                           height=36).pack(pady=8)
 
         def _unlink_tableur(self):
-            """Annule le lien avec le tableur sélectionné."""
+            """Annule le lien avec le tableur sélectionné ET avec le tableur de
+            secours (copie) : les deux liens sont coupés ensemble."""
             self._tableur_path = ""
+            self._tableur_secours_path = ""
+            self._secours_watch_gen = getattr(self, "_secours_watch_gen", 0) + 1  # stoppe la surveillance
             self._ods_rows_cache = None
             if hasattr(self, "_info_cache"): self._info_cache.clear()
             self.save_settings()
-            messagebox.showinfo("Tableur", "Lien avec le tableur supprimé.")
+            messagebox.showinfo("Tableur", "Lien avec le tableur (et avec le tableur de secours) supprimé.")
 
         def _stop_before_tableur_action(self):
             """Arrête la lecture seulement lorsqu'une action du menu est choisie."""
@@ -9196,6 +9569,7 @@ try:
                 self._tableur_menu_win = None
             items = [
                 ("📂 Sélection tableur", self._configure_tableur),
+                ("📂 Tableur de secours (copie)", self._configure_tableur_secours),
                 ("✏️ Modification tableur", self._modifier_tableur),
                 ("🧪 Test tableur", self._test_tableur),
                 ("🌐 Compléter le tableur", self._open_completer_tableur_window),
@@ -9301,7 +9675,11 @@ try:
 
         def _modifier_tableur(self):
             """Ouvre le tableur déjà sélectionné dans son application par défaut
-            (LibreOffice Calc, Excel, etc.) afin de permettre sa modification."""
+            (LibreOffice Calc, Excel, etc.) afin de permettre sa modification.
+            Si un tableur de secours (copie) est configuré, Citron le met aussi
+            à jour : à chaque enregistrement du tableur principal, il en
+            remplace le contenu par une copie à jour (la version précédente de
+            la copie est conservée à côté)."""
             path = self._get_tableur_path_or_warn()
             if not path:
                 return
@@ -9314,6 +9692,15 @@ try:
                     subprocess.Popen(["xdg-open", path])
             except Exception as ex:
                 messagebox.showerror("Erreur", f"Impossible d'ouvrir le tableur :\n{ex}")
+                return
+            secours = (getattr(self, "_tableur_secours_path", "") or "").strip()
+            if secours:
+                self._surveiller_tableur_pour_secours()
+                messagebox.showinfo(
+                    "Tableur de secours",
+                    "Le tableur s'ouvre. À chaque enregistrement, Citron mettra aussi à jour "
+                    f"le tableur de secours :\n{secours}\n\n"
+                    "(La version précédente de la copie est conservée à côté.)")
 
         # ══════════════════════════════════════════════════════════
         # ── 🌐 Compléter le tableur (recherche internet) ─────────────
@@ -9597,6 +9984,13 @@ try:
             remplis (par toi ou par une recherche précédente) ne sont
             jamais écrasés."""
             win._completer_stage = "vide" if not valeurs else "formulaire"
+            # Recherche pas à pas (Film / Films d'animation) : index de la
+            # prochaine source à interroger. Conservé quand le formulaire
+            # est reconstruit (retour depuis une simulation, par ex.) ;
+            # remis à zéro par « Effacer les champs » ou si le titre change.
+            if not hasattr(win, "_recherche_etape"):
+                win._recherche_etape = 0
+                win._recherche_titre_ref = ""
             valeurs = valeurs or {}
             container = self._completer_tableur_clear_container(win)
             if container is None:
@@ -9659,6 +10053,9 @@ try:
                 else:
                     autre_categorie_row.pack_forget()
                     win.field_categorie.set(nom if est_coche else "")
+                # « Pièce de théâtre » cochée : Acteurs -> Comédiens,
+                # Réalisateur (Filmeur) -> Mise en scène (et inversement).
+                self._completer_tableur_maj_libelles(win)
 
             for i, nom in enumerate(categories):
                 coche_initiale = (_categorie_match == nom) or (nom == "Autre" and _categorie_est_autre)
@@ -9670,8 +10067,11 @@ try:
 
             ctk.CTkLabel(autre_categorie_row, text="Préciser la catégorie :",
                          font=("Arial", 12)).pack(side="left", padx=(0, 8))
-            ctk.CTkEntry(autre_categorie_row, textvariable=win.field_categorie_autre,
-                         width=220).pack(side="left", fill="x", expand=True)
+            _entry_autre_categorie = ctk.CTkEntry(
+                autre_categorie_row, textvariable=win.field_categorie_autre, width=220)
+            _entry_autre_categorie.pack(side="left", fill="x", expand=True)
+            # Copier / coller (Ctrl+C/V/X/A + clic droit), comme les autres champs
+            self._menu_contextuel_champ(_entry_autre_categorie)
 
             # Renseignements divers (8ème colonne du tableur) : champ libre
             # — remplace l'ancienne case à cocher « noir et blanc ». Tape
@@ -9683,8 +10083,11 @@ try:
             ctk.CTkLabel(divers_row, text="Renseignements divers :",
                          font=("Arial", 12)).pack(side="left", padx=(0, 8))
             win.field_renseignements = ctk.StringVar(value=valeurs.get("renseignements", "") or "")
-            ctk.CTkEntry(divers_row, textvariable=win.field_renseignements, width=220,
-                         placeholder_text="ex : N/B, VOSTFR...").pack(side="left", fill="x", expand=True)
+            _entry_divers = ctk.CTkEntry(divers_row, textvariable=win.field_renseignements, width=220,
+                                         placeholder_text="ex : N/B, VOSTFR...")
+            _entry_divers.pack(side="left", fill="x", expand=True)
+            # Copier / coller (Ctrl+C/V/X/A + clic droit), comme les autres champs
+            self._menu_contextuel_champ(_entry_divers)
 
             if _categorie_est_autre:
                 autre_categorie_row.pack(fill="x", pady=(0, 10), before=divers_row)
@@ -9692,9 +10095,13 @@ try:
             scroll = ctk.CTkScrollableFrame(container, fg_color="transparent")
             scroll.pack(fill="both", expand=True)
 
+            win._labels_champs = {}
+
             def _champ(label, cle, placeholder=""):
-                ctk.CTkLabel(scroll, text=label, font=("Arial", 13, "bold"),
-                             anchor="w").pack(fill="x", pady=(8, 2))
+                _lbl = ctk.CTkLabel(scroll, text=label, font=("Arial", 13, "bold"),
+                                    anchor="w")
+                _lbl.pack(fill="x", pady=(8, 2))
+                win._labels_champs[cle] = _lbl
                 var = ctk.StringVar(value=valeurs.get(cle, "") or "")
                 entry_widget = ctk.CTkEntry(scroll, textvariable=var, height=34,
                                              placeholder_text=placeholder)
@@ -9721,9 +10128,7 @@ try:
             self._menu_contextuel_champ(resume_box, est_texte=True)
             win.field_resume = resume_box
 
-            win.status_label = ctk.CTkLabel(
-                scroll, text="", font=("Arial", 11), text_color="#cccccc",
-                wraplength=460, justify="left")
+            win.status_label = self._creer_status_copiable(scroll)
             win.status_label.pack(fill="x", pady=(8, 0))
 
             cle_row = ctk.CTkFrame(container, fg_color="transparent")
@@ -9770,6 +10175,76 @@ try:
 
             win.titre_entry.bind("<Return>", lambda e, w=win: self._completer_tableur_lancer_recherche(w))
             win.titre_entry.focus_set()
+            # Libellés adaptés à la catégorie déjà cochée (ex. fiche rouverte
+            # depuis Infos pour une pièce de théâtre).
+            self._completer_tableur_maj_libelles(win)
+
+        def _creer_status_copiable(self, parent):
+            """Zone de message dont le texte peut être sélectionné à la souris
+            et copié (Ctrl+C, ou clic droit → Copier / Tout copier), contrairement
+            à un simple label. Se pilote comme un label : .configure(text=...,
+            text_color=...) et .pack(...). Le texte n'est pas modifiable."""
+            tb = ctk.CTkTextbox(parent, height=100, font=("Arial", 11), wrap="word",
+                                fg_color="transparent", border_width=0,
+                                text_color="#cccccc")
+
+            def _touche(e):
+                ctrl = bool(e.state & 0x4)
+                if ctrl and e.keysym.lower() in ("c", "insert"):
+                    return None
+                if ctrl and e.keysym.lower() == "a":
+                    tb.tag_add("sel", "1.0", "end-1c")
+                    return "break"
+                if e.keysym in ("Left", "Right", "Up", "Down", "Home", "End", "Prior", "Next"):
+                    return None
+                return "break"
+
+            def _copier_tout():
+                try:
+                    texte = tb.get("1.0", "end-1c")
+                    tb.clipboard_clear()
+                    tb.clipboard_append(texte)
+                except Exception:
+                    pass
+
+            def _copier_selection():
+                try:
+                    texte = tb.get("sel.first", "sel.last")
+                except Exception:
+                    texte = tb.get("1.0", "end-1c")
+                try:
+                    tb.clipboard_clear()
+                    tb.clipboard_append(texte)
+                except Exception:
+                    pass
+
+            def _menu(e):
+                m = Menu(tb, tearoff=0)
+                m.add_command(label="Copier", command=_copier_selection)
+                m.add_command(label="Tout copier", command=_copier_tout)
+                try:
+                    m.tk_popup(e.x_root, e.y_root)
+                finally:
+                    m.grab_release()
+
+            tb.bind("<Key>", _touche)
+            tb.bind("<Button-3>", _menu)
+
+            class _Status:
+                def configure(self_, **kw):
+                    if "text" in kw:
+                        tb.delete("1.0", "end")
+                        tb.insert("1.0", kw["text"])
+                    if "text_color" in kw:
+                        tb.configure(text_color=kw["text_color"])
+
+                def pack(self_, *a, **k):
+                    tb.pack(*a, **k)
+
+                def winfo_exists(self_):
+                    return tb.winfo_exists()
+
+            return _Status()
 
         def _completer_tableur_ouvrir_champ(self, win, nom_champ, libelle):
             """Ouvre dans le navigateur le lien actuellement saisi dans un
@@ -9789,6 +10264,8 @@ try:
             sinon une nouvelle saisie complètement différente risquerait
             d'écraser par erreur la ligne d'origine mémorisée."""
             win._completer_stage = "vide"
+            win._recherche_etape = 0
+            win._recherche_titre_ref = ""
             for attr in ("_edition_titre_original", "_edition_annee_original"):
                 if hasattr(win, attr):
                     delattr(win, attr)
@@ -9803,13 +10280,23 @@ try:
             vides dans le formulaire — les champs déjà remplis (par
             l'utilisateur ou par une recherche précédente) ne sont jamais
             écrasés. Le Titre (et l'Année, si renseignée) servent de
-            critères pour affiner les résultats."""
+            critères pour affiner les résultats.
+
+            Deux modes selon la catégorie cochée :
+            - « Film » ou « Films d'animation » : recherche PAS À PAS, une
+              seule source par clic (voir _completer_tableur_recherche_etape) ;
+            - toute autre catégorie (ou aucune) : comportement d'origine,
+              cascade automatique de toutes les sources."""
             champs_actuels = self._completer_tableur_lire_champs(win)
             titre = champs_actuels["titre"]
             if not titre:
                 win.status_label.configure(
                     text="⚠️ Indique d'abord un titre à rechercher.", text_color="#ff8888")
                 return
+            # Toutes les catégories : recherche pas à pas (une source par clic,
+            # TMDB d'abord), selon la liste ⚙ Paramètres → 🌐 Sites de recherches.
+            self._completer_tableur_recherche_etape(win, champs_actuels)
+            return
             annee_cible = champs_actuels["annee"] or None
             try:
                 win.search_btn.configure(state="disabled", text="⏳ Recherche en cours…")
@@ -9831,27 +10318,1229 @@ try:
                 if resultat:
                     titre_ba = resultat.get("titre") or titre
                     annee_ba = resultat.get("annee") or annee_cible
-                    self._trace_recherche(f"Bande-annonce → YouTube : recherche « Bande annonce du film {titre_ba}"
-                                           + (f" ({annee_ba})" if annee_ba else "") + " »…")
-                    try:
-                        resultat["bande_annonce"] = self._rechercher_bande_annonce_youtube(titre_ba, annee_ba)
-                        if resultat["bande_annonce"]:
-                            self._trace_recherche(f"Bande-annonce → YouTube : trouvée ({resultat['bande_annonce']})")
-                        else:
-                            self._trace_recherche("Bande-annonce → YouTube : rien trouvé, repli sur Dailymotion…")
-                            resultat["bande_annonce"] = self._rechercher_bande_annonce_dailymotion(titre_ba, annee_ba)
-                            if resultat["bande_annonce"]:
-                                self._trace_recherche(
-                                    f"Bande-annonce → Dailymotion : trouvée ({resultat['bande_annonce']})")
-                            else:
-                                self._trace_recherche("Bande-annonce → Dailymotion : rien trouvé non plus")
-                    except Exception as ex:
-                        resultat["bande_annonce"] = ""
-                        self._trace_recherche(f"Bande-annonce : ÉCHEC — {type(ex).__name__}: {ex}")
+                    self._rechercher_bande_annonce_dans_resultat(resultat, titre_ba, annee_ba)
                 if win.winfo_exists():
                     self.after(0, lambda: self._completer_tableur_on_resultat(win, champs_actuels, resultat, erreur))
 
             threading.Thread(target=worker, daemon=True).start()
+
+        # ══════════════════════════════════════════════════════════════
+        # 🎭 « Pièce de théâtre » : libellés spéciaux + recherche sur TPA
+        # (tpa.fr — Théâtres et Producteurs Associés)
+        # ══════════════════════════════════════════════════════════════
+        def _completer_tableur_est_theatre(self, win):
+            """True UNIQUEMENT si la case à cocher « Pièce de théâtre » est
+            cochée dans « Compléter le tableur » (on lit la case elle-même,
+            pas le texte de « Préciser la catégorie » : une catégorie libre
+            saisie sous « Autre » ne déclenche donc jamais le mode théâtre)."""
+            try:
+                v = win._categorie_vars.get("Pièce de théâtre")
+                return bool(v and v.get())
+            except Exception:
+                return False
+
+        def _completer_tableur_maj_libelles(self, win):
+            """Renomme deux champs du formulaire selon la catégorie :
+            - « Pièce de théâtre » cochée : « Acteurs » devient « Comédiens »
+              et « Réalisateur (Filmeur) » devient « Mise en scène » ;
+            - sinon (autre case, aucune case) : libellés d'origine.
+            Seuls les libellés changent : les champs gardent le même rôle
+            (colonnes « Personnes » et « Réalisateur » du tableur)."""
+            theatre = self._completer_tableur_est_theatre(win)
+            libelles = {
+                "personnes": ("Acteurs (séparés par « / »)", "Comédiens (séparés par « / »)"),
+                "realisateur": ("Réalisateur (Filmeur)", "Mise en scène"),
+            }
+            etiquettes = getattr(win, "_labels_champs", {}) or {}
+            for cle, (normal, theatral) in libelles.items():
+                lbl = etiquettes.get(cle)
+                if lbl is None:
+                    continue
+                try:
+                    lbl.configure(text=theatral if theatre else normal)
+                except Exception:
+                    pass
+
+        # ── TPA : outils de lecture ────────────────────────────────
+        def _tpa_get(self, url, timeout=15):
+            """Télécharge une page de tpa.fr (HTML complet : le texte
+            « Lire plus » du résumé y est déjà présent en entier, le bouton
+            ne fait que le déplier à l'écran — inutile de simuler le clic)."""
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; Citron/1.0; usage personnel)",
+                       "Accept-Language": "fr-FR,fr;q=0.9"}
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8", errors="ignore")
+
+        def _tpa_norm(self, s):
+            """Titre normalisé (sans accents/casse/ponctuation) pour comparer."""
+            import re
+            c = self._tableur_search_clean(s or "")
+            c = re.sub(r"[^a-z0-9]+", " ", c)
+            return re.sub(r"\s+", " ", c).strip()
+
+        def _tpa_texte(self, fragment):
+            """Texte brut d'un fragment HTML (balises retirées, espaces
+            normalisés)."""
+            import re
+            import html as html_mod
+            t = re.sub(r"(?is)<(script|style|noscript)\b.*?</\1>", " ", fragment or "")
+            # balises de mise en forme : retirées SANS espace (« <em>Titre</em>, » reste « Titre, »)
+            t = re.sub(r"(?i)</?(?:em|i|b|strong|u|small|sup|sub|font)\b[^>]*>", "", t)
+            t = re.sub(r"<[^>]+>", " ", t)
+            t = html_mod.unescape(t).replace("\xa0", " ")
+            t = re.sub(r"\s+", " ", t).strip()
+            return re.sub(r"\s+([,.])", r"\1", t)
+
+        def _tpa_blocs(self, fragment):
+            """Découpe du HTML en « blocs » (un par ligne visible : paragraphe,
+            item de liste, <br>…), pour lire « Distribution : … » ligne par
+            ligne comme à l'écran."""
+            import re
+            f = re.sub(r"(?is)<(script|style|noscript)\b.*?</\1>", " ", fragment or "")
+            return re.split(
+                r"(?i)<\s*br\s*/?\s*>|</?\s*(?:p|div|li|ul|ol|h[1-6]|tr|td|th|table|tbody|thead|"
+                r"section|article|dl|dt|dd|header|footer|aside|nav)\b[^>]*>", f)
+
+        def _tpa_date(self, s):
+            """« 11/01/11 » ou « 11/01/2011 » -> (2011, 1, 11), sinon None."""
+            import re
+            m = re.fullmatch(r"(\d{2})/(\d{2})/(\d{2}|\d{4})", (s or "").strip())
+            if not m:
+                return None
+            a = m.group(3)
+            annee = int(a) if len(a) == 4 else 2000 + int(a)
+            return (annee, int(m.group(2)), int(m.group(1)))
+
+        def _tpa_score_titre(self, cible, trouve):
+            """0 = même titre (articles initiaux ignorés), 1 = tous les mots
+            significatifs du titre recherché sont dans le titre trouvé,
+            2 = titres très proches ; None = pas la même pièce. `cible` et
+            `trouve` sont déjà normalisés (voir _tpa_norm)."""
+            import re
+            import difflib
+            if not cible or not trouve:
+                return None
+
+            def sans_article(x):
+                return re.sub(r"^(le|la|les|l|un|une|des|the)\s+", "", x)
+
+            if cible == trouve or sans_article(cible) == sans_article(trouve):
+                return 0
+            if self._titre_correspond_strictement(cible, trouve):
+                return 1
+            if difflib.SequenceMatcher(None, cible, trouve).ratio() >= 0.88:
+                return 2
+            return None
+
+        def _tpa_candidats_archive(self, titre):
+            """Retrouve les pièces portant ce titre dans la liste complète des
+            spectacles de tpa.fr (« Tous les spectacles », archives depuis
+            2008, classées par ordre alphabétique et paginées). C'est le
+            chemin fiable : la zone de recherche du site fonctionne en
+            JavaScript, donc inutilisable depuis Citron. Renvoie une liste de
+            dicts {url, titre, debut, fin, score} (dates connues par la
+            liste), une même pièce pouvant avoir été reprise plusieurs fois
+            (une fiche par reprise)."""
+            import re
+            import html as html_mod
+            cible = self._tpa_norm(titre)
+            if not cible:
+                return []
+            premier = cible[0]
+            if premier.isalpha():
+                base, sep = f"https://tpa.fr/pieces-tous/?letter={premier.upper()}", "&"
+            else:
+                base, sep = "https://tpa.fr/pieces-tous", "?"
+            trouves, vus, idents_vus = [], set(), set()
+            depasse = 0
+            for page in range(0, 30):
+                url = base if page == 0 else f"{base}{sep}lis={page}"
+                try:
+                    html_text = self._tpa_get(url)
+                except Exception as ex:
+                    self._trace_recherche(
+                        f"TPA : échec de lecture de la liste des spectacles ({url}) — "
+                        f"{type(ex).__name__}: {ex}")
+                    break
+                balises = []
+                for m in re.finditer(r"<a\b([^>]*)>", html_text, re.I):
+                    attrs = m.group(1)
+                    mt = re.search(r'title\s*=\s*"\s*Spectacle\s+([^"]*)"', attrs, re.I)
+                    mh = re.search(r'href\s*=\s*"([^"]+-(\d+)\.html)"', attrs, re.I)
+                    if mt and mh:
+                        balises.append((m.start(), m.end(),
+                                        html_mod.unescape(mt.group(1)).strip(),
+                                        mh.group(1), mh.group(2)))
+                if not balises:
+                    break
+                idents_page = {b[4] for b in balises}
+                if page > 0 and idents_page <= idents_vus:
+                    break  # le site renvoie la même page : fin de la liste
+                idents_vus |= idents_page
+                derniere_cle = ""
+                for i, (debut_b, fin_b, t, href, ident) in enumerate(balises):
+                    limite = balises[i + 1][0] if i + 1 < len(balises) else len(html_text)
+                    segment = html_text[fin_b:min(limite, fin_b + 1500)]
+                    md = re.search(r"(\d{2}/\d{2}/\d{2,4})\s+(\d{2}/\d{2}/\d{2,4})",
+                                   self._tpa_texte(segment))
+                    cle = self._tpa_norm(t)
+                    if cle:
+                        derniere_cle = cle
+                    score = self._tpa_score_titre(cible, cle)
+                    if score is None or ident in vus:
+                        continue
+                    vus.add(ident)
+                    d1 = self._tpa_date(md.group(1)) if md else None
+                    d2 = self._tpa_date(md.group(2)) if md else None
+                    trouves.append({
+                        "url": urllib.parse.urljoin("https://tpa.fr/", html_mod.unescape(href)),
+                        "titre": t, "debut": d1, "fin": d2 or d1, "score": score})
+                # Liste triée par ordre alphabétique : une fois la page où
+                # devrait figurer le titre dépassée (+1 page de sécurité),
+                # inutile de continuer.
+                if derniere_cle and derniere_cle > cible and not derniere_cle.startswith(cible):
+                    depasse += 1
+                    if depasse >= 2:
+                        break
+                if not (f"lis={page + 1}" in html_text or "Page suivante" in html_text):
+                    break
+            return trouves
+
+        def _tpa_candidats_ddg(self, titre):
+            """Repli si la liste de tpa.fr n'a rien donné : moteur de
+            recherche limité au site (DuckDuckGo/Bing…, voir
+            _rechercher_url_duckduckgo). Les dates ne sont pas connues à ce
+            stade (lues ensuite sur la fiche)."""
+            import re
+            try:
+                urls = self._rechercher_url_duckduckgo(
+                    f"{titre} pièce de théâtre", site_filtre="tpa.fr", max_resultats=6)
+            except Exception as ex:
+                self._trace_recherche(f"TPA : repli moteur de recherche en échec — {type(ex).__name__}: {ex}")
+                return []
+            if isinstance(urls, str):
+                urls = [urls] if urls else []
+            res = []
+            for u in urls or []:
+                if re.search(r"tpa\.fr/(?:pieces-theatre-[a-z\-]+|spectacles-en-tournee)/[^?#]*-\d+\.html", u):
+                    res.append({"url": u, "titre": "", "debut": None, "fin": None, "score": 1})
+            return res
+
+        def _tpa_extraire_credit(self, blocs, labels):
+            """Noms d'une ligne « Distribution : A, B, C » (ou « Mise en
+            scène : X »), séparés par « / ». Les noms sont lus de préférence
+            dans les liens de la ligne (un lien par artiste), sinon découpés
+            sur les virgules."""
+            import re
+            motif = re.compile(r"^\s*(?:" + "|".join(labels) + r")\b[^:]{0,40}:\s*(.*)$", re.I | re.S)
+            for i, b in enumerate(blocs):
+                txt = self._tpa_texte(b)
+                m = motif.match(txt)
+                if not m:
+                    continue
+                source_html, reste = b, m.group(1).strip()
+                if not reste:
+                    # libellé et noms dans deux blocs voisins
+                    for suivant in blocs[i + 1:i + 3]:
+                        t2 = self._tpa_texte(suivant)
+                        if t2 and not re.match(r"^[^:]{2,40}:", t2):
+                            source_html, reste = suivant, t2
+                            break
+                noms = [self._tpa_texte(a) for a in re.findall(r"(?is)<a\b[^>]*>(.*?)</a>", source_html)]
+                noms = [n for n in noms if n and n.lower() not in ("lire plus", "fermer", "voir plus")]
+                if not noms and reste:
+                    noms = [n.strip(" .") for n in re.split(r",|;|\s+et\s+", reste) if n.strip(" .")]
+                uniques = []
+                for n in noms:
+                    n = re.sub(r"\s+", " ", n).strip()
+                    if n and n not in uniques:
+                        uniques.append(n)
+                if uniques:
+                    return " / ".join(uniques)
+            return ""
+
+        def _tpa_analyser_page(self, html_text, url):
+            """Lit une fiche de pièce sur tpa.fr (ex. https://tpa.fr/pieces-
+            theatre-paris/le-poisson-scorpion-14218.html) et renvoie un dict :
+            titre, resume (texte développé « Lire plus »), personnes
+            (Distribution, séparés par « / »), realisateur (Mise en scène),
+            annee (année de la DERNIÈRE date de représentation, d'après
+            « Première et dernière : Du jj/mm/aa au jj/mm/aa »), affiche
+            (adresse de l'image ouverte par un clic sur l'affiche — c'est
+            l'adresse qu'on copie à la main dans le nouvel onglet)."""
+            import re
+            from urllib.parse import urljoin
+            data = {}
+            mt = re.search(r"(?is)<h1\b[^>]*>(.*?)</h1>", html_text)
+            data["titre"] = self._tpa_texte(mt.group(1)) if mt else ""
+            corps = html_text[mt.end():] if mt else html_text
+            blocs = self._tpa_blocs(corps)
+            textes = [self._tpa_texte(b) for b in blocs]
+
+            # Début du résumé : juste après les onglets « Infos / Presse / Avis ».
+            debut = 0
+            for i, t in enumerate(textes[:120]):
+                if re.fullmatch(r"(?i)avis(\s*\(\d+\))?", t) or \
+                        (len(t) < 70 and re.match(r"(?i)^infos\b.*\bavis\b", t)):
+                    debut = i + 1
+                    break
+            else:
+                for i, t in enumerate(textes[:120]):
+                    if re.fullmatch(r"(?i)infos", t):
+                        debut = i + 1
+                        break
+
+            stop = re.compile(
+                r"(?i)^(?:(?:distribution|avec|mise en sc[eè]ne|collaboration|cr[ée]ation|adaptation|"
+                r"costumes?|lumi[èe]res?|d[ée]cors?|sc[ée]nographie|musique|texte|auteurs?|production|"
+                r"chor[ée]graphie|assistant\w*|traduction)\b[^:]{0,60}:|dur[ée]e$|"
+                r"premi[èe]re et derni[èe]re$|infos et r[ée]servations$)")
+            ignorer = re.compile(r"(?i)^(lire plus|fermer|voir plus|lire plus fermer|infos|presse.*|avis.*)$")
+            paras = []
+            for i in range(debut, len(blocs)):
+                t = textes[i]
+                if not t:
+                    continue
+                if stop.match(t) or (paras and "/acteurs-theatre/" in blocs[i]):
+                    break
+                if ignorer.match(t):
+                    continue
+                paras.append(t)
+                if len(paras) >= 8:
+                    break
+            propres = []
+            for p in paras:
+                if p.rstrip().endswith(("…", "...")):
+                    pref = re.sub(r"\s*(…|\.\.\.)$", "", p.rstrip())[:40]
+                    if any(q is not p and q.startswith(pref) and len(q) > len(p) for q in paras):
+                        continue  # version tronquée du même paragraphe
+                propres.append(p)
+            data["resume"] = "\n\n".join(propres).strip()
+
+            data["personnes"] = self._tpa_extraire_credit(
+                blocs, ("Distribution", "Avec", r"Interpr[ée]t[ée]e? par", r"Interpr[ée]tation"))
+            data["realisateur"] = self._tpa_extraire_credit(blocs, (r"Mise en sc[eè]ne",))
+
+            # Dernière date de représentation -> année.
+            plat = " ".join(t for t in textes if t)
+            md = re.search(
+                r"Premi[èe]re\s+et\s+derni[èe]re\s+(?:Du\s+|Le\s+)?(\d{2}/\d{2}/\d{2,4})"
+                r"(?:\s+(?:au|-|à)\s+(\d{2}/\d{2}/\d{2,4}))?", plat, re.I)
+            if md:
+                d_fin = self._tpa_date(md.group(2) or md.group(1))
+                d_deb = self._tpa_date(md.group(1))
+                if d_fin:
+                    data["annee"] = str(d_fin[0])
+                data["debut"], data["fin"] = d_deb, d_fin or d_deb
+
+            # Affiche : adresse de l'image ouverte par le clic sur l'affiche.
+            og = ""
+            mo = (re.search(r'(?is)<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', html_text)
+                  or re.search(r'(?is)<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']', html_text))
+            if mo:
+                og = mo.group(1).strip()
+            id_og = ""
+            m_id = re.search(r"x(\d+)-or\.\w+$", og.split("?")[0]) if og else None
+            if m_id:
+                id_og = m_id.group(1)
+            liens = re.findall(
+                r'(?is)<a\b[^>]*href=["\']([^"\']*/user/img/[^"\']+?\.(?:jpe?g|png))["\'][^>]*>\s*<img', html_text)
+            affiche = ""
+            if liens:
+                choisi = next((l for l in liens if id_og and f"x{id_og}-" in l), liens[0])
+                affiche = urljoin(url, choisi)
+            elif og:
+                affiche = re.sub(r"/(\d+)x(\d+)x(\d+)(-or\.\w+)$", r"/0x1200x\3\4", og)
+            if affiche and self._format_image_autorise(affiche):
+                data["affiche"] = affiche
+            return data
+
+        def _rechercher_tpa(self, titre, annee_cible=None):
+            """Source TPA (tpa.fr) pour une pièce de théâtre : retrouve la
+            fiche (liste complète des spectacles du site, puis moteur de
+            recherche en repli), lit le résumé complet, les comédiens, la mise
+            en scène, l'année de la dernière représentation et l'adresse de
+            l'affiche. Plusieurs reprises d'une même pièce peuvent exister
+            (une fiche par reprise) : si une année est indiquée on prend la
+            reprise jouée cette année-là, sinon la plus récente. Renvoie un
+            dict (voir _tpa_analyser_page) ou None."""
+            self._trace_recherche(f"TPA : recherche de « {titre} »" +
+                                  (f" ({annee_cible})" if annee_cible else "") + "…")
+            cands = []
+            try:
+                cands = self._tpa_candidats_archive(titre)
+            except Exception as ex:
+                self._trace_recherche(f"TPA : lecture de la liste des spectacles en échec — "
+                                      f"{type(ex).__name__}: {ex}")
+            if not cands:
+                self._trace_recherche("TPA : titre absent de la liste des spectacles, repli sur un moteur de recherche…")
+                cands = self._tpa_candidats_ddg(titre)
+            if not cands:
+                self._trace_recherche(f"TPA : aucune fiche trouvée pour « {titre} »")
+                return None
+
+            meilleur = min(c.get("score", 1) for c in cands)
+            cands = [c for c in cands if c.get("score", 1) == meilleur]
+
+            if annee_cible and str(annee_cible).isdigit():
+                a = int(annee_cible)
+
+                def couvre(c):
+                    d, f = c.get("debut"), c.get("fin")
+                    if d and f:
+                        return d[0] <= a <= f[0]
+                    return None
+
+                ok = [c for c in cands if couvre(c)]
+                inconnus = [c for c in cands if couvre(c) is None]
+                if ok:
+                    cands = ok
+                elif inconnus:
+                    cands = inconnus
+                else:
+                    self._trace_recherche(
+                        f"TPA : {len(cands)} fiche(s) trouvée(s) pour « {titre} », aucune jouée en {a}, rejeté")
+                    return None
+            else:
+                cands.sort(key=lambda c: c.get("fin") or (0, 0, 0), reverse=True)
+
+            nb = len(cands)
+            for c in cands[:4]:
+                try:
+                    html_text = self._tpa_get(c["url"])
+                except Exception as ex:
+                    self._trace_recherche(f"TPA : échec de lecture de {c['url']} — {type(ex).__name__}: {ex}")
+                    continue
+                data = self._tpa_analyser_page(html_text, c["url"])
+                trouve = data.get("titre", "")
+                if trouve and not (self._titre_correspond_strictement(titre, trouve)
+                                   or self._titres_similaires(titre, trouve, 0.8)):
+                    self._trace_recherche(
+                        f"TPA : titre « {trouve} » ne correspond pas à « {titre} », rejeté ({c['url']})")
+                    continue
+                if not (data.get("resume") or data.get("annee") or data.get("personnes")):
+                    self._trace_recherche(f"TPA : fiche sans résumé, année ni distribution, rejetée ({c['url']})")
+                    continue
+                data["source"] = c["url"]
+                if nb > 1 and not annee_cible:
+                    data["_info"] = (f"{nb} reprises de « {titre} » sur tpa.fr : la plus récente a été "
+                                     f"retenue ({c['url']}). Indique l'année pour en choisir une autre.")
+                self._trace_recherche(
+                    f"TPA : fiche retenue « {trouve} » ({c['url']}) — année={data.get('annee', '')}, "
+                    f"comédiens={'oui' if data.get('personnes') else 'non'}, "
+                    f"mise en scène={'oui' if data.get('realisateur') else 'non'}, "
+                    f"résumé={'oui' if data.get('resume') else 'non'}, affiche={'oui' if data.get('affiche') else 'non'}")
+                return data
+            self._trace_recherche(f"TPA : aucune fiche exploitable pour « {titre} »")
+            return None
+
+        # ══════════════════════════════════════════════════════════════
+        # 🎭 Sources suivantes pour « Pièce de théâtre » (après TPA) :
+        # Les Archives du spectacle → SensCritique → TheatreOnline → Offi.
+        # Même principe pour les quatre : la recherche interne de ces sites
+        # n'est pas utilisable depuis Citron (JavaScript / formulaires), donc
+        # la fiche est retrouvée via le moteur de recherche limité au site
+        # (comme pour AlloCiné / SensCritique côté films), puis lue.
+        # ══════════════════════════════════════════════════════════════
+        def _theatre_meta(self, html_text, nom):
+            """Contenu d'une balise <meta> (name= ou property=)."""
+            import re
+            import html as html_mod
+            m = (re.search(r'<meta[^>]+(?:name|property)=["\']' + re.escape(nom) +
+                           r'["\'][^>]*content=["\']([^"\']*)["\']', html_text, re.I)
+                 or re.search(r'<meta[^>]+content=["\']([^"\']*)["\'][^>]*(?:name|property)=["\']' +
+                              re.escape(nom) + r'["\']', html_text, re.I))
+            return html_mod.unescape(m.group(1)).strip() if m else ""
+
+        def _theatre_json_ld(self, html_text):
+            """Tous les objets JSON-LD (schema.org) d'une page, à plat."""
+            import re
+            import json
+            res = []
+            for blk in re.findall(
+                    r'(?is)<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html_text):
+                try:
+                    obj = json.loads(blk.strip())
+                except Exception:
+                    continue
+                pile = [obj]
+                while pile:
+                    o = pile.pop()
+                    if isinstance(o, list):
+                        pile.extend(o)
+                    elif isinstance(o, dict):
+                        res.append(o)
+                        pile.extend(v for v in o.values() if isinstance(v, (list, dict)))
+            return res
+
+        def _theatre_noms_ld(self, valeur):
+            """Noms contenus dans une valeur JSON-LD (texte, objet ou liste)."""
+            noms = []
+            if isinstance(valeur, str):
+                noms.append(valeur)
+            elif isinstance(valeur, dict):
+                if valeur.get("name"):
+                    noms.append(str(valeur["name"]))
+            elif isinstance(valeur, list):
+                for v in valeur:
+                    noms.extend(self._theatre_noms_ld(v))
+            uniques = []
+            for n in noms:
+                n = " ".join(n.split())
+                if n and n not in uniques:
+                    uniques.append(n)
+            return uniques
+
+        def _theatre_paragraphes_apres_titre(self, html_text, motif_titre, motif_stop=None, maxi=8):
+            """Paragraphes qui suivent un intertitre (« Présentation »,
+            « Résumé »…) jusqu'au prochain intertitre ou motif d'arrêt."""
+            import re
+            m = re.search(r"(?is)<h[1-6][^>]*>\s*(?:" + motif_titre + r")\s*</h[1-6]>(.*?)(?=<h[1-6]\b|$)", html_text)
+            if not m:
+                return ""
+            paras = []
+            for b in self._tpa_blocs(m.group(1)):
+                t = self._tpa_texte(b)
+                if not t or re.match(r"(?i)^(lire plus|fermer|voir plus)$", t):
+                    continue
+                if motif_stop and re.match(motif_stop, t, re.I):
+                    break
+                paras.append(t)
+                if len(paras) >= maxi:
+                    break
+            return "\n\n".join(paras).strip()
+
+        def _theatre_fiche_par_moteur(self, nom, titre, annee_cible, site_filtre, motif_url, analyser, max_urls=5,
+                                      qualificatif="pièce de théâtre"):
+            """Retrouve les fiches d'une pièce sur un site via le moteur de
+            recherche limité au site, lit chacune avec `analyser(html, url)`
+            et renvoie la meilleure (dict) ou None. Une fiche dont le titre
+            ne correspond pas est rejetée ; si une année est connue, on ne
+            garde que les fiches dont les dates sont à ±1 an de cette année
+            (mieux vaut ne rien remplir que remplir avec une autre mise en
+            scène de la même pièce)."""
+            import re
+            try:
+                urls = self._rechercher_url_duckduckgo(
+                    f"{titre} {qualificatif}".strip(), site_filtre, max_resultats=max_urls)
+            except Exception as ex:
+                self._trace_recherche(f"{nom} : moteur de recherche en échec — {type(ex).__name__}: {ex}")
+                return None
+            if isinstance(urls, str):
+                urls = [urls] if urls else []
+            urls = [u for u in dict.fromkeys(urls or []) if re.search(motif_url, u)]
+            if not urls:
+                self._trace_recherche(f"{nom} : le moteur de recherche n'a renvoyé aucune fiche pour « {titre} »")
+                return None
+            retenues = []
+            for u in urls[:max_urls]:
+                try:
+                    html_text = self._tpa_get(u)
+                except Exception as ex:
+                    self._trace_recherche(f"{nom} : échec de lecture de {u} — {type(ex).__name__}: {ex}")
+                    continue
+                data = analyser(html_text, u)
+                trouve = data.get("titre", "")
+                if trouve and not (self._titre_correspond_strictement(titre, trouve)
+                                   or self._titres_similaires(titre, trouve, 0.8)):
+                    self._trace_recherche(f"{nom} : titre « {trouve} » ne correspond pas à « {titre} », rejeté ({u})")
+                    continue
+                if not any(data.get(c) for c in ("resume", "annee", "personnes", "realisateur", "affiche")):
+                    self._trace_recherche(f"{nom} : fiche sans information exploitable, rejetée ({u})")
+                    continue
+                data["source"] = u
+                retenues.append(data)
+            if not retenues:
+                self._trace_recherche(f"{nom} : aucune fiche exploitable pour « {titre} »")
+                return None
+            if annee_cible and str(annee_cible).isdigit():
+                a = int(annee_cible)
+
+                def proche(d):
+                    deb, fin = d.get("_debut"), d.get("_fin")
+                    an = int(d["annee"]) if str(d.get("annee", "")).isdigit() else None
+                    if deb and fin and deb <= a <= fin:
+                        return True
+                    connues = [x for x in (deb, fin, an) if x]
+                    if not connues:
+                        return None
+                    return any(abs(x - a) <= 1 for x in connues)
+
+                ok = [d for d in retenues if proche(d)]
+                inconnues = [d for d in retenues if proche(d) is None]
+                if ok:
+                    retenues = ok
+                elif inconnues:
+                    retenues = inconnues
+                else:
+                    self._trace_recherche(
+                        f"{nom} : {len(retenues)} fiche(s) trouvée(s) pour « {titre} », aucune autour de {a}, rejeté")
+                    return None
+            d = retenues[0]
+            d.pop("_debut", None)
+            d.pop("_fin", None)
+            if len(retenues) > 1 and not annee_cible:
+                d["_info"] = (f"{len(retenues)} fiches trouvées sur {nom} : la première a été retenue "
+                              f"({d['source']}). Indique l'année pour en choisir une autre.")
+            return d
+
+        # ── Les Archives du spectacle ─────────────────────────────
+        def _lads_analyser(self, html_text, url):
+            """Fiche https://lesarchivesduspectacle.net/s/<id>-<titre> : les
+            équipes sont dans des tableaux « Libellé | personnes » (Mise en
+            scène, Interprétation…), une ligne sans libellé prolongeant la
+            précédente ; le rôle, entre parenthèses, est ignoré. Pas
+            d'affiche (l'image de la page est le logo du site)."""
+            import re
+            data = {}
+            mt = re.search(r"(?is)<h1\b[^>]*>(.*?)</h1>", html_text)
+            data["titre"] = self._tpa_texte(mt.group(1)) if mt else ""
+            lignes, dernier = [], ""
+            for tr in re.findall(r"(?is)<tr\b[^>]*>(.*?)</tr>", html_text):
+                cellules = re.findall(r"(?is)<t[hd]\b[^>]*>(.*?)</t[hd]>", tr)
+                if len(cellules) < 2:
+                    continue
+                lib = self._tpa_texte(cellules[0])
+                if lib:
+                    dernier = lib
+                lignes.append((dernier, cellules[1]))
+
+            def noms(motif):
+                res = []
+                for lib, cellule in lignes:
+                    if re.match(motif, lib, re.I):
+                        liens = [self._tpa_texte(a) for a in re.findall(
+                            r'(?is)<a\b[^>]*href="[^"]*/p/\d+[^"]*"[^>]*>(.*?)</a>', cellule)]
+                        if not liens:
+                            t = self._tpa_texte(cellule)
+                            liens = [t] if t else []
+                        for n in liens:
+                            if n and n not in res:
+                                res.append(n)
+                return " / ".join(res)
+
+            data["realisateur"] = noms(r"mise en sc[eè]ne")
+            data["personnes"] = noms(r"(?:interpr[ée]tation|jeu\b|distribution|com[ée]diens?|avec\b)")
+            sans_tableaux = re.sub(r"(?is)<table\b.*?</table>", " ", html_text)
+            plat = self._tpa_texte(sans_tableaux)
+            m = re.search(r"cr[ée]{1,2}(?:ation)?\b[^.]{0,80}?\b(1[5-9]\d{2}|20\d{2})\b", plat, re.I)
+            if m:
+                data["annee"] = m.group(1)
+                data["_debut"] = data["_fin"] = int(m.group(1))
+            resume = self._theatre_paragraphes_apres_titre(
+                html_text, r"R[ée]sum[ée]|Pr[ée]sentation|Argument|Synopsis")
+            if resume:
+                data["resume"] = resume
+            return data
+
+        def _rechercher_lads(self, titre, annee_cible=None):
+            """Source « Les Archives du spectacle » (lesarchivesduspectacle.net) :
+            mise en scène, interprètes, année de création (et résumé quand
+            la fiche en a un)."""
+            return self._theatre_fiche_par_moteur(
+                "Les Archives du spectacle", titre, annee_cible,
+                "lesarchivesduspectacle.net/s", r"lesarchivesduspectacle\.net/s/\d+",
+                self._lads_analyser)
+
+        # ── SensCritique ─────────────────────────────────────────
+        def _senscritique_theatre_analyser(self, html_text, url):
+            """Fiche SensCritique d'une pièce : titre, résumé (og:description)
+            et affiche (og:image) lus dans les balises <meta> ; mise en scène,
+            interprètes et année lus dans les données JSON-LD de la page
+            quand elles y figurent."""
+            import re
+            data = {}
+            titre_page = self._theatre_meta(html_text, "og:title")
+            if not titre_page:
+                m = re.search(r"(?is)<title[^>]*>(.*?)</title>", html_text)
+                titre_page = self._tpa_texte(m.group(1)) if m else ""
+            propre = re.sub(r"\s*[-–|]\s*(?:Pi[èe]ce|Th[ée][âa]tre|Spectacle|SensCritique).*$", "",
+                            titre_page, flags=re.I).strip()
+            m_an = re.search(r"\((\d{4})\)\s*$", propre)
+            if m_an:
+                data["annee"] = m_an.group(1)
+                propre = propre[:m_an.start()].strip()
+            data["titre"] = propre
+            resume = self._theatre_meta(html_text, "og:description") or self._theatre_meta(html_text, "description")
+            if len(resume) >= 40 and "senscritique" not in resume.lower()[:60]:
+                data["resume"] = resume
+            affiche = self._theatre_meta(html_text, "og:image")
+            if affiche and self._format_image_autorise(affiche):
+                data["affiche"] = affiche
+            for o in self._theatre_json_ld(html_text):
+                if not data.get("realisateur") and o.get("director"):
+                    data["realisateur"] = " / ".join(self._theatre_noms_ld(o["director"]))
+                if not data.get("personnes") and o.get("actor"):
+                    data["personnes"] = " / ".join(self._theatre_noms_ld(o["actor"]))
+                if not data.get("annee"):
+                    for cle in ("datePublished", "dateCreated", "startDate"):
+                        mm = re.match(r"(\d{4})", str(o.get(cle, "")))
+                        if mm:
+                            data["annee"] = mm.group(1)
+                            break
+            return data
+
+        def _rechercher_senscritique_theatre(self, titre, annee_cible=None):
+            """Source SensCritique pour une pièce de théâtre (fiches
+            /theatre/ ou /spectacle/ ; le film a sa propre méthode)."""
+            return self._theatre_fiche_par_moteur(
+                "SensCritique", titre, annee_cible, "senscritique.com",
+                r"senscritique\.com/(?:theatre|spectacle|piece)[^/]*/", self._senscritique_theatre_analyser)
+
+        # ── TheatreOnline ────────────────────────────────────────
+        def _theatreonline_analyser(self, html_text, url):
+            """Fiche https://www.theatreonline.com/Spectacle/<titre>/<id> :
+            titre (h1), affiche (og:image), résumé (intertitre « Résumé /
+            Présentation… » sinon description de la page), « Mise en scène : »
+            et « Avec / Distribution : » lus ligne par ligne, dates de
+            représentation (« du … au … »)."""
+            import re
+            data = {}
+            mt = re.search(r"(?is)<h1\b[^>]*>(.*?)</h1>", html_text)
+            data["titre"] = self._tpa_texte(mt.group(1)) if mt else ""
+            corps = html_text[mt.end():] if mt else html_text
+            blocs = self._tpa_blocs(corps)
+            data["realisateur"] = self._tpa_extraire_credit(blocs, (r"Mise en sc[eè]ne",))
+            data["personnes"] = self._tpa_extraire_credit(
+                blocs, ("Distribution", "Avec", r"Interpr[ée]t[ée]e? par", r"Interpr[ée]tation"))
+            resume = self._theatre_paragraphes_apres_titre(
+                html_text, r"R[ée]sum[ée]|Pr[ée]sentation|Le spectacle|Synopsis|L['’]histoire|Argument")
+            if not resume:
+                desc = self._theatre_meta(html_text, "og:description") or self._theatre_meta(html_text, "description")
+                if len(desc) >= 60:
+                    resume = desc
+            if resume:
+                data["resume"] = resume
+            affiche = self._theatre_meta(html_text, "og:image")
+            if affiche and self._format_image_autorise(affiche):
+                data["affiche"] = affiche
+            plat = self._tpa_texte(corps)
+            m = re.search(r"\b[Dd]u\s+(?:\w+\s+)?(\d{1,2}(?:er)?\s+[A-Za-zéûô]+\s+(\d{4})|\d{2}/\d{2}/(\d{4}))"
+                          r"\s+au\s+(?:\w+\s+)?(\d{1,2}(?:er)?\s+[A-Za-zéûô]+\s+(\d{4})|\d{2}/\d{2}/(\d{4}))", plat)
+            if m:
+                deb = int(m.group(2) or m.group(3))
+                fin = int(m.group(5) or m.group(6))
+                data["annee"] = str(fin)
+                data["_debut"], data["_fin"] = deb, fin
+            return data
+
+        def _rechercher_theatreonline(self, titre, annee_cible=None):
+            """Source TheatreOnline (theatreonline.com)."""
+            return self._theatre_fiche_par_moteur(
+                "TheatreOnline", titre, annee_cible, "theatreonline.com/Spectacle",
+                r"theatreonline\.com/Spectacle/[^/?#]+/\d+", self._theatreonline_analyser)
+
+        # ── Offi (L'Officiel des spectacles) ─────────────────────
+        def _offi_analyser(self, html_text, url):
+            """Fiche https://www.offi.fr/theatre/<salle>/<titre>-<id>.html :
+            ligne « De X, mise en scène Y. Avec A, B, C. » (les interprètes
+            sont des liens /artiste/), « Date de début / Date de fin »
+            (l'année retenue est celle de la fin), résumé sous l'intertitre
+            « Présentation », affiche = og:image (grand format)."""
+            import re
+            data = {}
+            mt = re.search(r"(?is)<h1\b[^>]*>(.*?)</h1>", html_text)
+            data["titre"] = self._tpa_texte(mt.group(1)) if mt else ""
+            corps = html_text[mt.end():] if mt else html_text
+            for b in self._tpa_blocs(corps):
+                if "/artiste/" not in b:
+                    continue
+                t = self._tpa_texte(b)
+                if not re.search(r"\bAvec\b", t):
+                    continue
+                liens = [self._tpa_texte(a) for a in re.findall(
+                    r'(?is)<a\b[^>]*href="[^"]*/artiste/[^"]*"[^>]*>(.*?)</a>', b)]
+                apres_avec = b[re.search(r"\bAvec\b", b).start():]
+                liens = [self._tpa_texte(a) for a in re.findall(
+                    r'(?is)<a\b[^>]*href="[^"]*/artiste/[^"]*"[^>]*>(.*?)</a>', apres_avec)] or liens
+                uniques = []
+                for n in liens:
+                    if n and n not in uniques:
+                        uniques.append(n)
+                if uniques:
+                    data["personnes"] = " / ".join(uniques)
+                ms = re.search(r"mise en sc[eè]ne(?:\s+de)?\s+(.+?)(?:\.\s|\s+Avec\b|\.$|$)", t, re.I)
+                if ms:
+                    noms = [n.strip(" .") for n in re.split(r",|;|\s+et\s+", ms.group(1)) if n.strip(" .")]
+                    if noms:
+                        data["realisateur"] = " / ".join(dict.fromkeys(noms))
+                break
+            plat = self._tpa_texte(corps)
+            mf = re.search(r"Date de fin\s*:\s*\d{1,2}(?:er)?\s+\S+\s+(\d{4})", plat)
+            md = re.search(r"Date de d[ée]but\s*:\s*\d{1,2}(?:er)?\s+\S+\s+(\d{4})", plat)
+            if mf or md:
+                fin = int((mf or md).group(1))
+                data["annee"] = str(fin)
+                data["_debut"] = int(md.group(1)) if md else fin
+                data["_fin"] = fin
+            resume = self._theatre_paragraphes_apres_titre(
+                html_text, r"Pr[ée]sentation|R[ée]sum[ée]",
+                motif_stop=r"^(?:Le spectacle .* est r[ée]f[ée]renc[ée]|Derniers avis|Principaux artistes)")
+            if resume:
+                data["resume"] = resume
+            affiche = self._theatre_meta(html_text, "og:image")
+            if affiche and self._format_image_autorise(affiche):
+                data["affiche"] = affiche
+            return data
+
+        def _rechercher_offi(self, titre, annee_cible=None):
+            """Source Offi (L'Officiel des spectacles, offi.fr)."""
+            return self._theatre_fiche_par_moteur(
+                "Offi", titre, annee_cible, "offi.fr/theatre",
+                r"offi\.fr/theatre/[^/?#]+/[^/?#]+-\d+\.html", self._offi_analyser)
+
+        def _rechercher_bande_annonce_dans_resultat(self, resultat, titre_ba, annee_ba, libelle="du film"):
+            """Recherche de la bande-annonce (inchangée : YouTube, puis
+            repli sur Dailymotion) et stockage dans resultat["bande_annonce"].
+            Factorisée pour servir aux deux modes de recherche."""
+            self._trace_recherche(f"Bande-annonce → YouTube : recherche « Bande annonce {libelle} {titre_ba}"
+                                   + (f" ({annee_ba})" if annee_ba else "") + " »…")
+            try:
+                resultat["bande_annonce"] = self._rechercher_bande_annonce_youtube(titre_ba, annee_ba, libelle)
+                if resultat["bande_annonce"]:
+                    self._trace_recherche(f"Bande-annonce → YouTube : trouvée ({resultat['bande_annonce']})")
+                else:
+                    self._trace_recherche("Bande-annonce → YouTube : rien trouvé, repli sur Dailymotion…")
+                    resultat["bande_annonce"] = self._rechercher_bande_annonce_dailymotion(titre_ba, annee_ba, libelle)
+                    if resultat["bande_annonce"]:
+                        self._trace_recherche(
+                            f"Bande-annonce → Dailymotion : trouvée ({resultat['bande_annonce']})")
+                    else:
+                        self._trace_recherche("Bande-annonce → Dailymotion : rien trouvé non plus")
+            except Exception as ex:
+                resultat["bande_annonce"] = ""
+                self._trace_recherche(f"Bande-annonce : ÉCHEC — {type(ex).__name__}: {ex}")
+
+        def _completer_tableur_est_film(self, win):
+            """True si la catégorie cochée est « Film » ou « Films
+            d'animation » (seules catégories concernées par la recherche
+            pas à pas)."""
+            try:
+                cat = (win.field_categorie.get() or "").strip().casefold()
+            except Exception:
+                return False
+            return cat in ("film", "films d'animation")
+
+        # ══════════════════════════════════════════════════════════════
+        # 🌐 Sites de recherches : liste ordonnée PAR CATÉGORIE (case à
+        # cocher), modifiable dans ⚙ Paramètres → 🌐 Sites de recherches.
+        # TMDB est le premier site de toutes les listes par défaut.
+        # ══════════════════════════════════════════════════════════════
+        _CATEGORIES_RECHERCHE = ["Film", "Pièce de théâtre", "Films d'animation",
+                                 "Clip vidéo", "Concert", "Autre"]
+
+        def _categorie_recherche(self, win):
+            """Catégorie cochée dans « Compléter le tableur » (une des six
+            cases) ; « Autre » si c'est cette case (texte libre) ou si rien
+            n'est coché."""
+            try:
+                for nom, var in win._categorie_vars.items():
+                    if nom != "Autre" and var.get():
+                        return nom
+            except Exception:
+                pass
+            return "Autre"
+
+        def _registre_sites_recherche(self):
+            """Tous les sites connus : id -> {nom, fn(titre, année), cfg
+            (attribut de clé à configurer, ou None), url (accueil, pour
+            « y aller » à la main, ou None)}. Les sites ajoutés à la main
+            (adresse web) sont ajoutés à la fin."""
+            reg = {
+                "tmdb": {"nom": "TMDB", "fn": self._rechercher_tmdb, "cfg": "_tmdb_api_key",
+                         "url": "https://www.themoviedb.org/"},
+                "tvprog": {"nom": "tv-programme.com", "fn": self._rechercher_tv_programme, "cfg": None,
+                           "url": "https://www.tv-programme.com/"},
+                "allocine": {"nom": "AlloCiné",
+                             "fn": lambda t, a: self._rechercher_allocine(t, a, affiche_via_onglet=True),
+                             "cfg": None, "url": "https://www.allocine.fr/"},
+                "senscritique": {"nom": "SensCritique (film)", "fn": self._rechercher_senscritique,
+                                 "cfg": None, "url": "https://www.senscritique.com/"},
+                "plansamericains": {"nom": "Plansamericains", "fn": self._rechercher_plansamericains,
+                                    "cfg": None, "url": "https://www.plansamericains.com/"},
+                "ia": {"nom": "IA", "fn": self._rechercher_ia, "cfg": "_ia_api_key", "url": None},
+                "tpa": {"nom": "TPA", "fn": self._rechercher_tpa, "cfg": None, "url": "https://tpa.fr/"},
+                "lads": {"nom": "Les Archives du spectacle", "fn": self._rechercher_lads, "cfg": None,
+                         "url": "https://lesarchivesduspectacle.net/"},
+                "senscritique_theatre": {"nom": "SensCritique (théâtre)",
+                                         "fn": self._rechercher_senscritique_theatre, "cfg": None,
+                                         "url": "https://www.senscritique.com/"},
+                "theatreonline": {"nom": "TheatreOnline", "fn": self._rechercher_theatreonline,
+                                  "cfg": None, "url": "https://www.theatreonline.com/"},
+                "offi": {"nom": "Offi", "fn": self._rechercher_offi, "cfg": None, "url": "https://www.offi.fr/"},
+            }
+            for c in (getattr(self, "_search_sites_custom", None) or []):
+                try:
+                    reg[c["id"]] = {"nom": c["nom"], "cfg": None, "url": c["url"],
+                                    "fn": (lambda t, a, c=c: self._rechercher_site_perso(c, t, a))}
+                except Exception:
+                    pass
+            return reg
+
+        def _sites_recherche_defaut(self, categorie):
+            """Ordre par défaut d'une catégorie : TMDB d'abord, puis les
+            sites spécialisés (théâtre) ou les sources « film » (toutes les
+            autres cases, comme avant)."""
+            if categorie == "Pièce de théâtre":
+                return ["tmdb", "tpa", "lads", "senscritique_theatre", "theatreonline", "offi"]
+            return ["tmdb", "tvprog", "allocine", "senscritique", "plansamericains", "ia"]
+
+        def _sites_recherche_ids(self, categorie):
+            """Identifiants des sites d'une catégorie, dans l'ordre choisi par
+            l'utilisateur (ou l'ordre par défaut s'il n'a rien modifié)."""
+            cfg = getattr(self, "_search_sites_cfg", None) or {}
+            ids = cfg.get(categorie)
+            if not isinstance(ids, list):
+                ids = self._sites_recherche_defaut(categorie)
+            return list(ids)
+
+        def _sources_pour_categorie(self, categorie):
+            """Liste ordonnée [(nom, méthode, clé_de_config)] de la catégorie
+            (sites inconnus ignorés)."""
+            reg = self._registre_sites_recherche()
+            return [(reg[i]["nom"], reg[i]["fn"], reg[i]["cfg"])
+                    for i in self._sites_recherche_ids(categorie) if i in reg]
+
+        def _rechercher_site_perso(self, site, titre, annee_cible=None):
+            """Site ajouté à la main (adresse web) : la fiche est retrouvée
+            via le moteur de recherche limité à ce site, puis lue de façon
+            générique (balises og:title / og:description / og:image et
+            données schema.org : réalisateur ou metteur en scène, acteurs,
+            année). Résultat parfois partiel selon le site."""
+            import re
+            from urllib.parse import urlparse
+            domaine = urlparse(site.get("url", "")).netloc.lower()
+            if domaine.startswith("www."):
+                domaine = domaine[4:]
+            if not domaine:
+                self._trace_recherche(f"{site.get('nom', 'Site')} : adresse invalide")
+                return None
+            return self._theatre_fiche_par_moteur(
+                site.get("nom", domaine), titre, annee_cible, domaine, re.escape(domaine),
+                self._senscritique_theatre_analyser, qualificatif="")
+
+        def _completer_tableur_recherche_etape(self, win, champs_actuels):
+            """Recherche PAS À PAS, pour TOUTES les catégories : chaque clic
+            sur « Rechercher » n'interroge qu'UNE source, dans l'ordre de la
+            liste de la catégorie cochée (⚙ Paramètres → 🌐 Sites de
+            recherches ; TMDB en premier par défaut), et ne complète que les
+            champs restés vides (ou effacés). La source suivante n'est jamais
+            lancée automatiquement : il faut relancer la recherche.
+            - Si le titre ou la catégorie change, on repart de la première.
+            - TMDB / IA sans clé configurée sont sautées.
+            - Après la dernière source, le clic suivant recommence au début.
+            - Bande-annonce : celle de TMDB si elle existe, sinon YouTube puis
+              Dailymotion, lancée seulement si ce champ est encore vide."""
+            titre = champs_actuels["titre"]
+            annee_cible = champs_actuels["annee"] or None
+            cat = self._categorie_recherche(win)
+            theatre = (cat == "Pièce de théâtre")
+            sources = self._sources_pour_categorie(cat)
+            if not sources:
+                win.status_label.configure(
+                    text=f"⚠️ Aucun site de recherche pour « {cat} ». Ajoutes-en dans "
+                         "⚙ Paramètres → 🌐 Sites de recherches.", text_color="#ff8888")
+                return
+
+            ref = f"{titre.casefold()}|{cat}"
+            if getattr(win, "_recherche_titre_ref", "") != ref:
+                win._recherche_etape = 0
+                win._recherche_titre_ref = ref
+
+            if theatre:
+                champs_a_completer = ("annee", "resume", "personnes", "realisateur", "affiche")
+            else:
+                champs_a_completer = ("annee", "resume", "personnes", "realisateur",
+                                      "type", "duree", "affiche")
+            noms_champs = {"annee": "Année", "resume": "Résumé / synopsis",
+                           "personnes": "Comédiens" if theatre else "Acteurs",
+                           "realisateur": "Mise en scène" if theatre else "Réalisateur",
+                           "type": "Type", "duree": "Durée", "affiche": "Affiche",
+                           "bande_annonce": "Bande-annonce"}
+            manquants = [c for c in champs_a_completer if not champs_actuels.get(c)]
+            ba_vide = not champs_actuels.get("bande_annonce")
+
+            if not manquants and not ba_vide:
+                win.status_label.configure(
+                    text="ℹ️ Tous les champs sont déjà renseignés : rien à rechercher. "
+                         "Efface un champ pour le faire rechercher à nouveau.",
+                    text_color="#cccccc")
+                return
+
+            # Saute les sources non configurées (TMDB / IA sans clé).
+            etape = getattr(win, "_recherche_etape", 0) % len(sources)
+            sautees = []
+            if manquants:
+                for _ in range(len(sources)):
+                    nom, fn, cle_cfg = sources[etape]
+                    if cle_cfg and not (getattr(self, cle_cfg, "") or "").strip():
+                        sautees.append(nom)
+                        etape = (etape + 1) % len(sources)
+                        continue
+                    break
+            nom, fn, _cfg = sources[etape]
+            suivante = (etape + 1) % len(sources)
+            derniere = (etape == len(sources) - 1)
+
+            try:
+                win.search_btn.configure(state="disabled", text="⏳ Recherche en cours…")
+            except Exception:
+                pass
+            if manquants:
+                win.status_label.configure(
+                    text=f"⏳ Recherche de « {titre} »" + (f" ({annee_cible})" if annee_cible else "") +
+                         f" sur {nom}…", text_color="#cccccc")
+            else:
+                win.status_label.configure(
+                    text="⏳ Recherche de la bande-annonce…", text_color="#cccccc")
+
+            def worker():
+                self._trace_tampon = []
+                self._trace_recherche(
+                    f"Clic « 🔎 Rechercher » (pas à pas, {cat}) — titre='{titre}', année='{annee_cible or ''}', "
+                    f"source={nom if manquants else 'aucune (bande-annonce seule)'}")
+                d = None
+                erreur = None
+                if manquants:
+                    try:
+                        d = fn(titre, annee_cible)
+                    except Exception as ex:
+                        self._trace_recherche(f"→ {nom} : ÉCHEC — {type(ex).__name__}: {ex}")
+                        d = None
+                    else:
+                        if d:
+                            self._trace_recherche(
+                                f"→ {nom} : résultat retenu (titre='{d.get('titre', '')}', "
+                                f"année='{d.get('annee', '')}', affiche={'oui' if d.get('affiche') else 'non'}, "
+                                f"bande-annonce={'oui' if d.get('bande_annonce') else 'non'})")
+                        else:
+                            self._trace_recherche(f"→ {nom} : aucun résultat (rejeté ou introuvable)")
+                resultat = dict(d) if d else {}
+                info_multi = resultat.pop("_info", "") if resultat else ""
+                if d:
+                    lien = d.get("source", "")
+                    resultat["source"] = f"{nom} ({lien})" if lien else nom
+                if ba_vide and not (resultat.get("bande_annonce") or "").strip():
+                    titre_ba = titre if theatre else (resultat.get("titre") or titre)
+                    annee_ba = resultat.get("annee") or annee_cible
+                    self._rechercher_bande_annonce_dans_resultat(
+                        resultat, titre_ba, annee_ba,
+                        libelle="de la pièce de théâtre" if theatre else "du film")
+
+                if manquants:
+                    win._recherche_etape = suivante
+                    restants = [noms_champs[c] for c in manquants if not (resultat.get(c) or "").strip()]
+                    if derniere:
+                        info = (f"Source interrogée : {nom} (dernière). Un nouveau clic "
+                                f"recommencera depuis {sources[0][0]}.")
+                    else:
+                        info = f"Source interrogée : {nom}. Prochain clic : {sources[suivante][0]}."
+                    if sautees:
+                        info += f" ({', '.join(sautees)} ignoré(e) : non configuré(e).)"
+                    if not d:
+                        info = f"{nom} n'a rien trouvé de fiable. " + info
+                        raisons = [l for l in getattr(self, "_trace_tampon", [])
+                                   if not l.startswith(("→", "Clic", "==="))][-2:]
+                        if raisons:
+                            info += "\nRaison : " + " | ".join(r[:180] for r in raisons)
+                    if info_multi:
+                        info += "\n" + info_multi
+                    if ba_vide and not (resultat.get("bande_annonce") or "").strip():
+                        restants.append(noms_champs["bande_annonce"])
+                    if restants:
+                        info += "\nChamps encore vides : " + ", ".join(restants) + "."
+                else:
+                    info = ""
+                if win.winfo_exists():
+                    self.after(0, lambda: self._completer_tableur_on_resultat(
+                        win, champs_actuels, resultat, erreur, info_etape=info))
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        # ── Fenêtre ⚙ Paramètres → 🌐 Sites de recherches ──────────
+        def _show_sites_recherche_window(self):
+            """Liste des sites de recherche PAR CATÉGORIE (case à cocher de
+            « Compléter le tableur ») : changer l'ordre (▲ ▼), retirer (✖),
+            ajouter un site connu ou une adresse web, rétablir l'ordre par
+            défaut, ou ouvrir le site dans le navigateur (🌐) pour s'en
+            servir à la main. Chaque changement est enregistré aussitôt et
+            vaut dès la prochaine recherche."""
+            from urllib.parse import urlparse
+            ancienne = getattr(self, "_sites_win", None)
+            try:
+                if ancienne is not None and ancienne.winfo_exists():
+                    ancienne.lift()
+                    ancienne.focus_force()
+                    return
+            except Exception:
+                pass
+            win = ctk.CTkToplevel(self)
+            win.title("🌐 Sites de recherches")
+            win.geometry("640x600")
+            win.minsize(560, 480)
+            self._sites_win = win
+            try:
+                win.transient(self)
+            except Exception:
+                pass
+
+            haut = ctk.CTkFrame(win, fg_color="transparent")
+            haut.pack(fill="x", padx=16, pady=(14, 2))
+            ctk.CTkLabel(haut, text="Catégorie :", font=("Arial", 13, "bold")).pack(side="left")
+            var_cat = ctk.StringVar(value=self._CATEGORIES_RECHERCHE[0])
+            ctk.CTkOptionMenu(haut, values=self._CATEGORIES_RECHERCHE, variable=var_cat, width=230,
+                              command=lambda _v: rafraichir()).pack(side="left", padx=10)
+            ctk.CTkLabel(
+                win, justify="left", anchor="w", wraplength=600, font=("Arial", 11), text_color="#aaaaaa",
+                text="Ordre de recherche, de haut en bas : à chaque clic sur « Rechercher » (Compléter le "
+                     "tableur), Citron interroge le site suivant et ne remplit que les champs encore vides. "
+                     "🌐 ouvre le site dans le navigateur pour l'utiliser à la main."
+            ).pack(fill="x", padx=16, pady=(4, 8))
+
+            liste = ctk.CTkScrollableFrame(win, fg_color="#242424")
+            liste.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+            bas = ctk.CTkFrame(win, fg_color="transparent")
+            bas.pack(fill="x", padx=16, pady=(0, 14))
+            zone_ajout = ctk.CTkFrame(bas, fg_color="transparent")
+            zone_ajout.pack(side="left")
+
+            def _enregistrer(cat, ids):
+                if not isinstance(getattr(self, "_search_sites_cfg", None), dict):
+                    self._search_sites_cfg = {}
+                self._search_sites_cfg[cat] = list(ids)
+                self.save_settings()
+                rafraichir()
+
+            def ouvrir(url):
+                try:
+                    webbrowser.open(url)
+                except Exception as ex:
+                    print(f"[Sites de recherches] ouverture impossible : {ex}")
+
+            def rafraichir():
+                cat = var_cat.get()
+                ids = self._sites_recherche_ids(cat)
+                reg = self._registre_sites_recherche()
+                for w in liste.winfo_children():
+                    w.destroy()
+                if not ids:
+                    ctk.CTkLabel(liste, text="Aucun site : la recherche est désactivée pour cette catégorie.",
+                                 text_color="#ff9999").pack(pady=14)
+                for i, sid in enumerate(ids):
+                    info = reg.get(sid)
+                    nom = info["nom"] if info else f"(site inconnu : {sid})"
+                    if info and info.get("cfg"):
+                        nom += "  — clé API requise"
+                    ligne = ctk.CTkFrame(liste, fg_color="#333333")
+                    ligne.pack(fill="x", pady=2, padx=2)
+                    ctk.CTkLabel(ligne, text=f"{i + 1}.", width=30).pack(side="left", padx=(8, 0))
+                    ctk.CTkLabel(ligne, text=nom, anchor="w", font=("Arial", 13)).pack(
+                        side="left", fill="x", expand=True, padx=6, pady=6)
+
+                    def _retirer(i=i, cat=cat, ids=ids):
+                        _enregistrer(cat, ids[:i] + ids[i + 1:])
+
+                    def _monter(i=i, cat=cat, ids=ids):
+                        n = list(ids)
+                        n[i - 1], n[i] = n[i], n[i - 1]
+                        _enregistrer(cat, n)
+
+                    def _descendre(i=i, cat=cat, ids=ids):
+                        n = list(ids)
+                        n[i + 1], n[i] = n[i], n[i + 1]
+                        _enregistrer(cat, n)
+
+                    ctk.CTkButton(ligne, text="✖", width=32, height=28, fg_color="#7a2f2f",
+                                  hover_color="#a03c3c", command=_retirer).pack(side="right", padx=(2, 8))
+                    if info and info.get("url"):
+                        ctk.CTkButton(ligne, text="🌐", width=32, height=28, fg_color="#2f5a7a",
+                                      hover_color="#3c75a0",
+                                      command=lambda u=info["url"]: ouvrir(u)).pack(side="right", padx=2)
+                    ctk.CTkButton(ligne, text="▼", width=32, height=28, fg_color="#4a4a4a",
+                                  state="normal" if i < len(ids) - 1 else "disabled",
+                                  command=_descendre).pack(side="right", padx=2)
+                    ctk.CTkButton(ligne, text="▲", width=32, height=28, fg_color="#4a4a4a",
+                                  state="normal" if i > 0 else "disabled",
+                                  command=_monter).pack(side="right", padx=2)
+
+                # Zone « ajouter » reconstruite à chaque changement
+                for w in zone_ajout.winfo_children():
+                    w.destroy()
+                dispo = {info["nom"]: sid for sid, info in reg.items() if sid not in ids}
+                if dispo:
+                    var_ajout = ctk.StringVar(value=list(dispo)[0])
+                    ctk.CTkOptionMenu(zone_ajout, values=list(dispo), variable=var_ajout, width=210).pack(
+                        side="left", padx=(0, 6))
+                    ctk.CTkButton(zone_ajout, text="➕ Ajouter", width=90,
+                                  command=lambda: _enregistrer(cat, ids + [dispo[var_ajout.get()]])
+                                  ).pack(side="left", padx=(0, 6))
+                ctk.CTkButton(zone_ajout, text="🔗 Autre site…", width=110, fg_color="#4a4a4a",
+                              command=lambda: _dialogue_site_perso(cat)).pack(side="left")
+
+            def _dialogue_site_perso(cat):
+                dlg = ctk.CTkToplevel(win)
+                dlg.title("🔗 Ajouter un site de recherche")
+                dlg.resizable(False, False)
+                dlg.transient(win)
+                ctk.CTkLabel(dlg, text="Nom du site", font=("Arial", 13, "bold")).pack(padx=20, pady=(18, 2), anchor="w")
+                var_nom = ctk.StringVar()
+                e1 = ctk.CTkEntry(dlg, textvariable=var_nom, width=380, height=34)
+                e1.pack(padx=20)
+                self._menu_contextuel_champ(e1)
+                ctk.CTkLabel(dlg, text="Adresse du site (ex. https://www.exemple.fr)",
+                             font=("Arial", 13, "bold")).pack(padx=20, pady=(12, 2), anchor="w")
+                var_url = ctk.StringVar()
+                e2 = ctk.CTkEntry(dlg, textvariable=var_url, width=380, height=34)
+                e2.pack(padx=20)
+                self._menu_contextuel_champ(e2)
+                msg = ctk.CTkLabel(dlg, text="", text_color="#ff8888", font=("Arial", 11))
+                msg.pack(padx=20, pady=(6, 0), anchor="w")
+
+                def _ok(event=None):
+                    url = (var_url.get() or "").strip()
+                    if url and "://" not in url:
+                        url = "https://" + url
+                    p = urlparse(url)
+                    dom = p.netloc.lower()
+                    if dom.startswith("www."):
+                        dom = dom[4:]
+                    if not dom or "." not in dom:
+                        msg.configure(text="Adresse invalide.")
+                        return
+                    nom = (var_nom.get() or "").strip() or dom
+                    sid = "perso-" + "".join(ch if ch.isalnum() else "-" for ch in dom)
+                    if not isinstance(getattr(self, "_search_sites_custom", None), list):
+                        self._search_sites_custom = []
+                    self._search_sites_custom = [c for c in self._search_sites_custom if c.get("id") != sid]
+                    self._search_sites_custom.append({"id": sid, "nom": nom, "url": f"{p.scheme}://{p.netloc}/"})
+                    ids = self._sites_recherche_ids(cat)
+                    if sid not in ids:
+                        ids.append(sid)
+                    dlg.destroy()
+                    _enregistrer(cat, ids)
+
+                btns = ctk.CTkFrame(dlg, fg_color="transparent")
+                btns.pack(pady=(10, 18))
+                ctk.CTkButton(btns, text="Ajouter", width=110, command=_ok).pack(side="left", padx=8)
+                ctk.CTkButton(btns, text="Annuler", width=110, fg_color="#5a5a5a",
+                              command=dlg.destroy).pack(side="left", padx=8)
+                e2.bind("<Return>", _ok)
+                e1.focus_set()
+                dlg.update_idletasks()
+                dlg.geometry(f"{dlg.winfo_reqwidth()}x{dlg.winfo_reqheight()}")
+                dlg.grab_set()
+
+            def _defaut():
+                cat = var_cat.get()
+                if isinstance(getattr(self, "_search_sites_cfg", None), dict):
+                    self._search_sites_cfg.pop(cat, None)
+                self.save_settings()
+                rafraichir()
+
+            ctk.CTkButton(bas, text="↺ Ordre par défaut", width=140, fg_color="#5a5a5a",
+                          command=_defaut).pack(side="right")
+            rafraichir()
 
         def _format_image_autorise(self, url_image):
             """Interdit le format webp pour les affiches (jpg/jpeg
@@ -10156,6 +11845,14 @@ try:
             produite le cas échéant (auparavant totalement silencieuse).
             Purement informatif : n'affecte jamais le comportement."""
             try:
+                tampon = getattr(self, "_trace_tampon", None)
+                if tampon is None:
+                    tampon = self._trace_tampon = []
+                tampon.append(str(msg))
+                del tampon[:-80]
+            except Exception:
+                pass
+            try:
                 print(f"[Compléter] {msg}")
             except Exception:
                 pass
@@ -10293,26 +11990,173 @@ try:
             (voir _rechercher_allocine, _rechercher_senscritique,
             _rechercher_plansamericains)."""
             import re
+            import html as html_mod
+            import time
+            import base64
             q = requete + (f" site:{site_filtre}" if site_filtre else "")
-            url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(q)
-            headers = {"User-Agent": "Mozilla/5.0 (compatible; Citron/1.0; usage personnel)",
-                       "Accept-Language": "fr-FR,fr;q=0.9"}
+            # En-têtes de navigateur « classique » : les moteurs renvoient
+            # une page anti-robot (sans aucun résultat) aux requêtes dont
+            # le User-Agent ressemble à un script.
+            headers = {
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "fr-FR,fr;q=0.9",
+            }
             vide = [] if max_resultats > 1 else ""
-            try:
-                req = urllib.request.Request(url, headers=headers)
-                with urllib.request.urlopen(req, timeout=10) as r:
-                    html_text = r.read().decode("utf-8", errors="ignore")
-            except Exception as ex:
-                self._trace_recherche(f"DuckDuckGo : échec réseau sur « {q} » — {type(ex).__name__}: {ex}")
-                return vide
 
-            liens_bruts = re.findall(r'class="result__a"[^>]*href="([^"]+)"', html_text)
+            def _lire(nom, req):
+                try:
+                    with urllib.request.urlopen(req, timeout=12) as r:
+                        return r.status, r.read().decode("utf-8", errors="ignore")
+                except Exception as ex:
+                    self._trace_recherche(
+                        f"{nom} : échec réseau sur « {q} » — {type(ex).__name__}: {ex}")
+                    return None, ""
+
+            def _decode_suivi(h):
+                """Décode un lien de suivi Bing (absolu « https://www.bing.com/ck/a?... »
+                OU relatif « /ck/a?... ») : l'adresse réelle est dans le paramètre
+                « u » (préfixe « a1 » + base64 url-safe). Renvoie h inchangé sinon."""
+                if "/ck/a?" not in h:
+                    return h
+                mu = re.search(r"[?&]u=([A-Za-z0-9_\-]+)", h)
+                if not mu:
+                    return h
+                bb = mu.group(1)
+                if bb.startswith("a1"):
+                    bb = bb[2:]
+                bb += "=" * (-len(bb) % 4)
+                try:
+                    return base64.urlsafe_b64decode(bb).decode("utf-8")
+                except Exception:
+                    return h
+
+            def _hrefs_filtres(html_text):
+                """Liens de la page, décodés, limités au site demandé : d'abord
+                les href (liens de suivi Bing inclus), puis toute adresse
+                « http(s)://… » écrite en clair dans la page."""
+                trouves = []
+                candidats = [html_mod.unescape(h) for h in
+                             re.findall(r'href=["\']([^"\']+)["\']', html_text)]
+                candidats += re.findall(r"https?://[^\s\"'<>\\]+", html_mod.unescape(html_text))
+                for h in candidats:
+                    h = _decode_suivi(h)
+                    if not h.startswith("http"):
+                        continue
+                    if site_filtre and site_filtre not in h:
+                        continue
+                    if any(x in h for x in ("bing.com", "mojeek.com", "duckduckgo.com", "brave.com")):
+                        continue
+                    if h not in trouves:
+                        trouves.append(h)
+                return trouves
+
+            liens_bruts = []
+            moteur = ""
+
+            # 1) DuckDuckGo (page HTML, puis version « lite »). S'il bloque
+            # (HTTP 202 / aucune réponse), il est mis de côté 10 minutes
+            # pour ne pas perdre de temps à chaque recherche.
+            if time.time() >= getattr(self, "_ddg_bloque_jusqua", 0):
+                req = urllib.request.Request(
+                    "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(q),
+                    headers=dict(headers, Referer="https://duckduckgo.com/"))
+                statut, html_text = _lire("DuckDuckGo (html)", req)
+                if html_text:
+                    liens_bruts = re.findall(r'class="result__a"[^>]*href="([^"]+)"', html_text)
+                    if not liens_bruts:
+                        self._trace_recherche(
+                            f"DuckDuckGo (html) : aucun lien pour « {q} » (HTTP {statut}"
+                            + (", blocage anti-robot probable" if statut == 202 else "") + ")")
+                if not liens_bruts:
+                    data = urllib.parse.urlencode({"q": q}).encode("utf-8")
+                    req = urllib.request.Request("https://lite.duckduckgo.com/lite/", data=data,
+                                                 headers=dict(headers, Referer="https://duckduckgo.com/"))
+                    statut, html_text = _lire("DuckDuckGo (lite)", req)
+                    if html_text:
+                        for tag in re.findall(r"<a\b[^>]*result-link[^>]*>", html_text):
+                            mh = re.search(r'href=["\']([^"\']+)["\']', tag)
+                            if mh:
+                                liens_bruts.append(mh.group(1))
+                        if not liens_bruts:
+                            self._trace_recherche(f"DuckDuckGo (lite) : aucun lien pour « {q} » (HTTP {statut})")
+                if liens_bruts:
+                    moteur = "DuckDuckGo"
+                else:
+                    self._ddg_bloque_jusqua = time.time() + 600
+                    self._trace_recherche("DuckDuckGo ne répond pas (blocage anti-robot) : "
+                                          "mis de côté 10 minutes, moteurs de secours utilisés")
+            else:
+                self._trace_recherche("DuckDuckGo mis de côté (blocage récent) → moteurs de secours")
+
+            # 2) Moteurs de secours : Bing, Mojeek, Brave. L'opérateur
+            # « site: » est limité au NOM DE DOMAINE (les moteurs ignorent ou
+            # rejettent souvent un chemin : « site:allocine.fr/film/... »
+            # donne zéro résultat) ; le chemin exact est vérifié ensuite
+            # sur chaque lien trouvé. Si rien ne sort avec « site: », une
+            # 2ème variante sans opérateur (juste le nom du site) est tentée.
             if not liens_bruts:
-                self._trace_recherche(f"DuckDuckGo : aucun résultat pour « {q} »")
+                domaine = (site_filtre or "").split("/")[0]
+                variantes = []
+                if domaine:
+                    variantes.append(f"{requete} site:{domaine}")
+                    variantes.append(f"{requete} {domaine.split('.')[0]}")
+                else:
+                    variantes.append(requete)
+                moteurs = [
+                    ("Bing", "https://www.bing.com/search?setlang=fr&cc=FR&q="),
+                    ("Mojeek", "https://www.mojeek.com/search?q="),
+                    ("Brave", "https://search.brave.com/search?source=web&q="),
+                ]
+                if not hasattr(self, "_moteurs_bloques"):
+                    self._moteurs_bloques = {}
+                for nom_moteur, base_url in moteurs:
+                    if time.time() < self._moteurs_bloques.get(nom_moteur, 0):
+                        self._trace_recherche(f"{nom_moteur} : mis de côté (blocage récent)")
+                        continue
+                    for variante in variantes:
+                        statut, html_text = _lire(
+                            f"{nom_moteur}", urllib.request.Request(
+                                base_url + urllib.parse.quote(variante), headers=headers))
+                        if not html_text:
+                            # erreur réseau / HTTP 429… : on laisse ce moteur 10 min
+                            self._moteurs_bloques[nom_moteur] = time.time() + 600
+                            break
+                        mt0 = re.search(r"<title[^>]*>([^<]*)</title>", html_text, re.IGNORECASE)
+                        if mt0 and "captcha" in mt0.group(1).lower():
+                            self._trace_recherche(f"{nom_moteur} : page Captcha reçue, mis de côté 10 minutes")
+                            self._moteurs_bloques[nom_moteur] = time.time() + 600
+                            break
+                        liens_bruts = _hrefs_filtres(html_text)
+                        if liens_bruts:
+                            moteur = f"{nom_moteur} (« {variante} »)"
+                            break
+                        # Diagnostic : que contient réellement la page ?
+                        tous = [html_mod.unescape(h) for h in
+                                re.findall(r'href=["\']([^"\']+)["\']', html_text)]
+                        suivis = [h for h in tous if "/ck/a?" in h]
+                        decodes = [_decode_suivi(h) for h in suivis[:40]]
+                        externes = [h for h in tous if h.startswith("http")
+                                    and not any(x in h for x in ("bing.com", "mojeek.com", "brave.com"))]
+                        externes += [d for d in decodes if d.startswith("http")]
+                        mt = re.search(r"<title[^>]*>([^<]*)</title>", html_text, re.IGNORECASE)
+                        self._trace_recherche(
+                            f"{nom_moteur} : aucun lien utile pour « {variante} » (HTTP {statut}, "
+                            f"page de {len(html_text)} octets, titre « {(mt.group(1).strip() if mt else '')[:60]} », "
+                            f"{len(tous)} liens dont {len(suivis)} de suivi Bing et {len(externes)} externes ; "
+                            f"domaines : {', '.join(sorted({urllib.parse.urlsplit(x).netloc for x in externes})[:12]) or 'aucun'})")
+                    if liens_bruts:
+                        break
+
+            if not liens_bruts:
+                self._trace_recherche(f"Aucun moteur n'a donné de résultat pour « {q} »")
                 return vide
+            self._trace_recherche(f"Fiches trouvées via {moteur} pour « {q} » : {len(liens_bruts)} lien(s)")
 
             liens = []
             for lien in liens_bruts[:max(max_resultats, 1)]:
+                lien = html_mod.unescape(lien)
                 m = re.search(r"[?&]uddg=([^&]+)", lien)
                 liens.append(urllib.parse.unquote(m.group(1)) if m else lien)
 
@@ -10486,7 +12330,7 @@ try:
             movie_id = film.get("id")
 
             detail_url = (f"https://api.themoviedb.org/3/movie/{movie_id}?api_key="
-                          + urllib.parse.quote(api_key) + "&language=fr-FR&append_to_response=credits")
+                          + urllib.parse.quote(api_key) + "&language=fr-FR&append_to_response=credits,videos&include_video_language=fr,en,null")
             req2 = urllib.request.Request(detail_url)
             with urllib.request.urlopen(req2, timeout=10) as r2:
                 det = json.loads(r2.read().decode("utf-8"))
@@ -10514,15 +12358,97 @@ try:
             poster_path = det.get("poster_path") or film.get("poster_path") or ""
             affiche = f"https://image.tmdb.org/t/p/w780{poster_path}" if poster_path else ""
 
+            # Bande-annonce : vidéo YouTube de type « Trailer » (sinon « Teaser »),
+            # en français de préférence, officielle de préférence.
+            bande_annonce = ""
+            videos = [v for v in ((det.get("videos") or {}).get("results") or [])
+                      if v.get("site") == "YouTube" and v.get("key")
+                      and v.get("type") in ("Trailer", "Teaser")]
+            if videos:
+                videos.sort(key=lambda v: (0 if v.get("type") == "Trailer" else 1,
+                                           0 if v.get("iso_639_1") == "fr" else 1,
+                                           0 if v.get("official") else 1))
+                bande_annonce = "https://www.youtube.com/watch?v=" + videos[0]["key"]
+
             return {
                 "titre": det.get("title") or film.get("title") or titre,
                 "annee": annee, "resume": resume, "personnes": personnes_str,
                 "realisateur": realisateur, "type": type_film, "duree": duree,
-                "affiche": affiche,
+                "affiche": affiche, "bande_annonce": bande_annonce,
                 "source": f"https://www.themoviedb.org/movie/{movie_id}",
             }
 
-        def _rechercher_allocine(self, titre, annee_cible=None):
+        def _allocine_urls_via_wikidata(self, titre, annee_cible=None):
+            """Dernier recours pour RETROUVER L'ADRESSE de la fiche AlloCiné
+            quand aucun moteur de recherche ne répond (DuckDuckGo/Mojeek
+            bloquent les requêtes automatiques) : Wikidata (API gratuite,
+            sans clé, faite pour les programmes) relie chaque film à son
+            identifiant AlloCiné (propriété P1265). Seule l'ADRESSE est prise
+            ici — toutes les informations (synopsis, acteurs, affiche…)
+            continuent d'être lues sur la fiche AlloCiné elle-même, rien
+            n'est repris de Wikipédia/Wikidata. L'année de sortie (P577,
+            à ±1 an près) départage les films homonymes. Renvoie une liste
+            d'URL de fiches (3 maximum), éventuellement vide."""
+            import re
+            headers = {"User-Agent": f"Citron/{CITRON_VERSION} (lecteur video personnel; usage personnel)",
+                       "Accept": "application/json"}
+
+            def _get(url):
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=12) as r:
+                    return json.loads(r.read().decode("utf-8"))
+
+            api = "https://www.wikidata.org/w/api.php?format=json&"
+            try:
+                rech = _get(api + "action=wbsearchentities&type=item&limit=10&language=fr&uselang=fr&search="
+                            + urllib.parse.quote(titre))
+                ids = [x["id"] for x in (rech.get("search") or []) if x.get("id")]
+                if not ids:
+                    self._trace_recherche(f"Wikidata : aucune entrée pour « {titre} »")
+                    return []
+                ent = _get(api + "action=wbgetentities&props=claims|labels&languages=fr|en&ids=" + "|".join(ids))
+            except Exception as ex:
+                self._trace_recherche(f"Wikidata : échec réseau — {type(ex).__name__}: {ex}")
+                return []
+
+            trouves = []
+            for qid in ids:
+                e = (ent.get("entities") or {}).get(qid) or {}
+                claims = e.get("claims") or {}
+                allo = []
+                for c in claims.get("P1265", []):
+                    v = ((c.get("mainsnak") or {}).get("datavalue") or {}).get("value")
+                    if isinstance(v, str) and v.strip().isdigit():
+                        allo.append(v.strip())
+                if not allo:
+                    continue
+                labels = e.get("labels") or {}
+                label = ((labels.get("fr") or labels.get("en") or {}).get("value")) or ""
+                if not self._titres_similaires(titre, label):
+                    continue
+                annees = []
+                for c in claims.get("P577", []):
+                    v = ((c.get("mainsnak") or {}).get("datavalue") or {}).get("value")
+                    if isinstance(v, dict):
+                        m = re.match(r"[+-]?(\d{4})", v.get("time", "") or "")
+                        if m:
+                            annees.append(int(m.group(1)))
+                trouves.append((qid, allo[0], label, annees))
+
+            if not trouves:
+                self._trace_recherche(f"Wikidata : aucun film « {titre} » relié à une fiche AlloCiné")
+                return []
+            if (annee_cible or "").isdigit():
+                cible = int(annee_cible)
+                bons = [t for t in trouves if any(abs(a - cible) <= 1 for a in t[3])]
+                if bons:
+                    trouves = bons
+            self._trace_recherche(
+                "Wikidata : fiche(s) AlloCiné retrouvée(s) → " +
+                " ; ".join(f"{lab} (cfilm={i}, années {a or '?'})" for _q, i, lab, a in trouves[:3]))
+            return [f"https://www.allocine.fr/film/fichefilm_gen_cfilm={i}.html" for _q, i, _l, _a in trouves[:3]]
+
+        def _rechercher_allocine(self, titre, annee_cible=None, affiche_via_onglet=False):
             """Recherche best-effort sur AlloCiné : la ou les fiches film
             sont retrouvées via DuckDuckGo (l'ancienne page de recherche
             interne du site, /recherche/?q=, a été fermée par AlloCiné —
@@ -10545,8 +12471,12 @@ try:
             film_urls = self._rechercher_url_duckduckgo(f"{titre} film", "allocine.fr/film/fichefilm", max_resultats=3)
             film_urls = [u for u in film_urls if "allocine.fr/film/fichefilm" in u]
             if not film_urls:
-                self._trace_recherche(f"AlloCiné : DuckDuckGo n'a renvoyé aucune fiche film pour « {titre} »")
-                return None
+                self._trace_recherche(
+                    f"AlloCiné : aucun moteur de recherche n'a renvoyé de fiche film pour « {titre} », "
+                    "essai via Wikidata (adresse de la fiche uniquement)")
+                film_urls = self._allocine_urls_via_wikidata(titre, annee_cible)
+                if not film_urls:
+                    return None
 
             candidats = []
             for film_url in film_urls:
@@ -10588,9 +12518,86 @@ try:
                     continue
                 if not data.get("titre"):
                     data["titre"] = titre
+                if affiche_via_onglet:
+                    data["_html"] = html_film
                 candidats.append(data)
 
-            return self._choisir_candidat_film("AlloCiné", titre, annee_cible, candidats)
+            choisi = self._choisir_candidat_film("AlloCiné", titre, annee_cible, candidats)
+            if choisi is not None:
+                html_choisi = choisi.pop("_html", "")
+                if affiche_via_onglet and html_choisi:
+                    # Mode pas à pas (Film / Films d'animation) : l'affiche
+                    # est récupérée comme à la main (voir
+                    # _allocine_affiche_comme_onglet).
+                    affiche = self._allocine_affiche_comme_onglet(html_choisi, choisi.get("source", ""))
+                    if affiche:
+                        choisi["affiche"] = affiche
+            return choisi
+
+        def _allocine_affiche_comme_onglet(self, html_text, url_fiche):
+            """Reproduit la méthode manuelle pour l'affiche AlloCiné : sur la
+            fiche du film (déjà choisie selon son année), repérer l'image
+            dont le texte alternatif est « poster du film Bande-annonce … »
+            (curieusement appelée ainsi par AlloCiné), l'ouvrir dans un
+            nouvel onglet et relever l'adresse de l'image dans la barre
+            d'adresse. Concrètement : on lit l'adresse de cette image dans
+            la page, puis on l'ouvre réellement (avec un Referer) et on
+            garde l'adresse finale après redirections éventuelles, comme le
+            ferait la barre d'adresse du nouvel onglet. Aucun recadrage
+            n'est retiré ici. Repli : balise og:image de la page. Les
+            images webp sont refusées. Renvoie "" si rien d'exploitable."""
+            import re
+            import html as html_mod
+            candidates = []
+            for m in re.finditer(r"<img\b[^>]*>", html_text, re.IGNORECASE):
+                tag = m.group(0)
+                alt = re.search(r'\balt=["\']([^"\']*)["\']', tag, re.IGNORECASE)
+                alt = html_mod.unescape(alt.group(1)).strip().lower() if alt else ""
+                if "poster du film" not in alt:
+                    continue
+                for attr in ("src", "data-src"):
+                    mm = re.search(r'\b' + attr + r'=["\']([^"\']+)["\']', tag, re.IGNORECASE)
+                    if mm:
+                        candidates.append(html_mod.unescape(mm.group(1)).strip())
+                ss = re.search(r'\bsrcset=["\']([^"\']+)["\']', tag, re.IGNORECASE)
+                if ss:
+                    for part in html_mod.unescape(ss.group(1)).split(","):
+                        u = part.strip().split(" ")[0]
+                        if u:
+                            candidates.append(u)
+            candidates = [u for u in candidates if u.startswith("http") and not u.startswith("data:")]
+            if not candidates:
+                self._trace_recherche(
+                    "AlloCiné : aucune image « poster du film » sur la fiche, repli sur og:image")
+                m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']',
+                              html_text, re.IGNORECASE)
+                if m:
+                    candidates = [html_mod.unescape(m.group(1)).strip()]
+            for img_url in candidates:
+                if not self._format_image_autorise(img_url):
+                    self._trace_recherche(f"AlloCiné : image webp ignorée → {img_url}")
+                    continue
+                final = img_url
+                try:
+                    hote = urllib.parse.urlsplit(img_url).netloc
+                    req = urllib.request.Request(img_url, headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; Citron/1.0; usage personnel)",
+                        "Referer": f"https://{hote}/" if hote else "https://www.allocine.fr/"})
+                    with urllib.request.urlopen(req, timeout=15) as r:
+                        final = r.geturl() or img_url
+                        if "webp" in (r.headers.get("Content-Type", "") or "").lower():
+                            self._trace_recherche(f"AlloCiné : le serveur renvoie du webp, ignoré → {final}")
+                            continue
+                except Exception as ex:
+                    self._trace_recherche(
+                        f"AlloCiné : ouverture de l'image impossible ({type(ex).__name__}: {ex}), "
+                        f"adresse lue dans la page conservée → {img_url}")
+                    final = img_url
+                if self._format_image_autorise(final):
+                    self._trace_recherche(f"AlloCiné : affiche (adresse de l'image) → {final}")
+                    return final
+            self._trace_recherche(f"AlloCiné : aucune affiche exploitable sur {url_fiche}")
+            return ""
 
         def _rechercher_plansamericains(self, titre, annee_cible=None):
             """Recherche best-effort sur plansamericains.com (site consacré
@@ -10784,7 +12791,7 @@ try:
                 "source": f"IA ({modele})",
             }
 
-        def _rechercher_bande_annonce_youtube(self, titre, annee=None):
+        def _rechercher_bande_annonce_youtube(self, titre, annee=None, libelle="du film"):
             """Recherche best-effort une bande-annonce sur YouTube, en lisant
             la page de résultats publique (pas d'API/clé nécessaire, mais
             cette méthode peut cesser de fonctionner si YouTube change la
@@ -10796,7 +12803,7 @@ try:
             film totalement différent). Renvoie l'URL de la vidéo choisie,
             ou "" si rien de fiable n'a été trouvé."""
             import re
-            requete = f"Bande annonce du film {titre}" + (f" ({annee})" if annee else "")
+            requete = f"Bande annonce {libelle} {titre}" + (f" ({annee})" if annee else "")
             url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote(requete)
             headers = {"User-Agent": "Mozilla/5.0 (compatible; Citron/1.0; usage personnel)",
                        "Accept-Language": "fr-FR,fr;q=0.9"}
@@ -10875,7 +12882,7 @@ try:
                                         _recence(v.get("temps"))))
             return f"https://www.youtube.com/watch?v={videos[0]['id']}"
 
-        def _rechercher_bande_annonce_dailymotion(self, titre, annee=None):
+        def _rechercher_bande_annonce_dailymotion(self, titre, annee=None, libelle="du film"):
             """Repli sur Dailymotion (demandé explicitement) si YouTube n'a
             rien donné de fiable : utilise l'API publique de Dailymotion
             (aucune clé nécessaire pour les données publiques), avec la même
@@ -10883,7 +12890,7 @@ try:
             façon (titre de la vidéo comparé strictement au titre recherché)
             avant d'être retenu. Renvoie l'URL de la vidéo choisie, ou "" si
             rien de fiable n'a été trouvé."""
-            requete = f"Bande annonce du film {titre}" + (f" ({annee})" if annee else "")
+            requete = f"Bande annonce {libelle} {titre}" + (f" ({annee})" if annee else "")
             url = ("https://api.dailymotion.com/videos?search=" + urllib.parse.quote(requete) +
                    "&fields=id,title&limit=10&sort=relevance&languages=fr")
             headers = {"User-Agent": "Mozilla/5.0 (compatible; Citron/1.0; usage personnel)"}
@@ -10923,6 +12930,7 @@ try:
             var = ctk.StringVar(value=getattr(self, "_tmdb_api_key", "") or "")
             entry = ctk.CTkEntry(dlg, textvariable=var, width=380, height=36)
             entry.pack(padx=20, pady=(10, 14))
+            self._menu_contextuel_champ(entry)  # Ctrl+V / clic droit : Copier, Coller…
 
             def _save(event=None):
                 self._tmdb_api_key = var.get().strip()
@@ -10958,16 +12966,21 @@ try:
             ctk.CTkLabel(dlg, text="Adresse de l'API (compatible OpenAI)", font=("Arial", 13, "bold")
                          ).pack(padx=20, pady=(18, 2), anchor="w")
             var_base = ctk.StringVar(value=getattr(self, "_ia_api_base", "") or "https://api.openai.com/v1")
-            ctk.CTkEntry(dlg, textvariable=var_base, width=380, height=34).pack(padx=20, pady=(0, 10))
+            _e_base = ctk.CTkEntry(dlg, textvariable=var_base, width=380, height=34)
+            _e_base.pack(padx=20, pady=(0, 10))
+            self._menu_contextuel_champ(_e_base)
 
             ctk.CTkLabel(dlg, text="Modèle", font=("Arial", 13, "bold")).pack(padx=20, anchor="w")
             var_modele = ctk.StringVar(value=getattr(self, "_ia_model", "") or "gpt-4o-mini")
-            ctk.CTkEntry(dlg, textvariable=var_modele, width=380, height=34).pack(padx=20, pady=(0, 10))
+            _e_modele = ctk.CTkEntry(dlg, textvariable=var_modele, width=380, height=34)
+            _e_modele.pack(padx=20, pady=(0, 10))
+            self._menu_contextuel_champ(_e_modele)
 
             ctk.CTkLabel(dlg, text="Clé API", font=("Arial", 13, "bold")).pack(padx=20, anchor="w")
             var_cle = ctk.StringVar(value=getattr(self, "_ia_api_key", "") or "")
             entry = ctk.CTkEntry(dlg, textvariable=var_cle, width=380, height=34)
             entry.pack(padx=20, pady=(0, 14))
+            self._menu_contextuel_champ(entry)
 
             def _save(event=None):
                 self._ia_api_base = var_base.get().strip() or "https://api.openai.com/v1"
@@ -10989,16 +13002,22 @@ try:
             entry.focus_set()
             dlg.grab_set()
 
-        def _completer_tableur_on_resultat(self, win, champs_avant, resultat, erreur):
+        def _completer_tableur_on_resultat(self, win, champs_avant, resultat, erreur, info_etape=""):
             """Appelé (dans le thread principal Tk) une fois la recherche
             internet terminée : ne remplit QUE les champs qui étaient vides
             avant la recherche, sans jamais écraser ce que l'utilisateur
             avait déjà saisi lui-même (ou obtenu d'une recherche
             précédente)."""
             try:
-                win.search_btn.configure(state="normal", text="🔎 Rechercher les champs vides sur internet")
+                texte_btn = "🔎 Rechercher les champs vides sur internet"
+                if info_etape:
+                    srcs = self._sources_pour_categorie(self._categorie_recherche(win))
+                    if srcs:
+                        texte_btn = f"🔎 Poursuivre la recherche sur {srcs[getattr(win, '_recherche_etape', 0) % len(srcs)][0]}"
+                win.search_btn.configure(state="normal", text=texte_btn)
             except Exception:
                 pass
+            suffixe_etape = f"\n{info_etape}" if info_etape else ""
             if erreur:
                 win.status_label.configure(text=f"❌ {erreur}", text_color="#ff8888")
                 return
@@ -11024,11 +13043,11 @@ try:
             source = resultat.get("source", "")
             if completes:
                 win.status_label.configure(
-                    text=f"✅ Champs complétés : {', '.join(completes)}." + (f"\nSource(s) : {source}" if source else ""),
+                    text=f"✅ Champs complétés : {', '.join(completes)}." + (f"\nSource(s) : {source}" if source else "") + suffixe_etape,
                     text_color="#88cc88")
             else:
                 win.status_label.configure(
-                    text="ℹ️ Rien de nouveau à ajouter (tous les champs étaient déjà remplis, ou rien trouvé).",
+                    text="ℹ️ Rien de nouveau à ajouter (tous les champs étaient déjà remplis, ou rien trouvé)." + suffixe_etape,
                     text_color="#cccccc")
 
         def _completer_tableur_lire_champs(self, win):
@@ -11468,6 +13487,10 @@ try:
                     ok, msg = self._ecrire_completion_dans_tableur(
                         champs2, chemin_tableur,
                         titre_recherche=_titre_recherche, annee_recherche=_annee_recherche)
+                    if ok:
+                        # Copie de secours (⚙ Paramètres → 💾) : jamais bloquante.
+                        msg = msg + self._ecrire_copie_secours(
+                            champs2, _titre_recherche, _annee_recherche)
                     if erreurs:
                         msg = msg + "\n\n⚠️ " + "\n⚠️ ".join(erreurs)
                 except Exception as ex:
@@ -11507,6 +13530,173 @@ try:
                     self._completer_tableur_effacer_champs(win)
             else:
                 messagebox.showerror("Erreur", msg)
+
+        def _ecrire_copie_secours(self, champs, titre_recherche=None, annee_recherche=None):
+            """Copie de secours : après une validation réussie dans le tableur
+            principal, écrit la MÊME ligne (mêmes champs, mêmes liens vers les
+            affiches/bandes-annonces locales, texte brut sans mise en forme)
+            dans le tableur de secours choisi via 🗂 Tableur → 📂 Tableur de
+            secours (copie). Si ce fichier n'existe pas encore, il est créé
+            par copie du tableur principal (déjà à jour). Un échec ne bloque
+            jamais la validation : il est seulement signalé dans le message.
+            Renvoie le texte à ajouter au message ('' si non configurée)."""
+            secours = (getattr(self, "_tableur_secours_path", "") or "").strip()
+            if not secours:
+                return ""
+            principal = getattr(self, "_tableur_path", "") or ""
+            try:
+                if principal and os.path.normcase(os.path.abspath(secours)) == \
+                        os.path.normcase(os.path.abspath(principal)):
+                    return "\n\n⚠️ Copie de secours ignorée : c'est le même fichier que le tableur principal."
+                if not os.path.isfile(secours):
+                    dossier = os.path.dirname(secours)
+                    if dossier:
+                        os.makedirs(dossier, exist_ok=True)
+                    shutil.copy2(principal, secours)
+                    self._trace_recherche(f"Copie de secours : fichier créé par copie du tableur ({secours})")
+                    return f"\n\n💾 Copie de secours créée (copie du tableur à jour) :\n{secours}"
+                ok2, msg2 = self._ecrire_completion_dans_tableur(
+                    champs, secours, titre_recherche=titre_recherche, annee_recherche=annee_recherche)
+                self._trace_recherche(f"Copie de secours : {'succès' if ok2 else 'échec'} — {msg2}")
+                if ok2:
+                    return "\n\n💾 Copie de secours mise à jour."
+                return f"\n\n⚠️ Copie de secours NON mise à jour :\n{msg2}"
+            except Exception as ex:
+                self._trace_recherche(f"Copie de secours : ÉCHEC — {type(ex).__name__}: {ex}")
+                return f"\n\n⚠️ Copie de secours NON mise à jour : {type(ex).__name__}: {ex}"
+
+        def _configure_tableur_secours(self):
+            """🗂 Tableur → 📂 Tableur de secours (copie) : sélection MANUELLE du
+            second tableur .ods qui sert de copie de secours. Un fichier existant
+            est utilisé tel quel ; un nom nouveau crée immédiatement le fichier
+            par copie du tableur principal. Ensuite : (1) chaque validation dans
+            « Compléter le tableur » écrit aussi la même ligne dans ce tableur ;
+            (2) « ✏️ Modification tableur » le met à jour après chaque
+            enregistrement ; (3) « 🗂 off (couper le lien) » coupe aussi ce lien.
+            Le tableur principal reste le seul utilisé pour la lecture, les
+            fiches, les recherches et le « 🧪 Test tableur »."""
+            principal = getattr(self, "_tableur_path", "") or ""
+            if not principal or not os.path.isfile(principal):
+                messagebox.showinfo(
+                    "Tableur de secours",
+                    "Sélectionne d'abord ton tableur principal :\n"
+                    "🗂 Tableur → 📂 Sélection tableur.")
+                return
+            actuel = (getattr(self, "_tableur_secours_path", "") or "").strip()
+            chemin = filedialog.asksaveasfilename(
+                title="Sélectionner (ou créer) le tableur de secours — copie (.ods)",
+                defaultextension=".ods", confirmoverwrite=False,
+                initialdir=os.path.dirname(actuel or principal) or None,
+                initialfile=os.path.basename(actuel) if actuel else "",
+                filetypes=[("LibreOffice Calc (.ods)", "*.ods"), ("Tous", "*.*")])
+            if not chemin:
+                return
+            chemin = os.path.normpath(chemin)
+            if os.path.normcase(os.path.abspath(chemin)) == os.path.normcase(os.path.abspath(principal)):
+                messagebox.showwarning("Tableur de secours",
+                                       "Choisis un fichier DIFFÉRENT du tableur principal.")
+                return
+            if os.path.isfile(chemin):
+                detail = "Ce fichier existant sera utilisé tel quel."
+            else:
+                try:
+                    dossier = os.path.dirname(chemin)
+                    if dossier:
+                        os.makedirs(dossier, exist_ok=True)
+                    shutil.copy2(principal, chemin)
+                except Exception as ex:
+                    messagebox.showerror("Tableur de secours",
+                                         f"Impossible de créer la copie :\n{type(ex).__name__}: {ex}")
+                    return
+                detail = "Fichier créé par copie du tableur principal."
+            self._tableur_secours_path = chemin
+            self.save_settings()
+            messagebox.showinfo(
+                "Tableur de secours",
+                f"Tableur de secours enregistré :\n{chemin}\n\n{detail}\n\n"
+                "• Chaque validation dans « Compléter le tableur » y écrit aussi la même ligne.\n"
+                "• « Modification tableur » le met aussi à jour après chaque enregistrement.\n"
+                "• « 🗂 off (couper le lien) » coupe aussi ce lien.")
+
+        def _synchroniser_secours_depuis_principal(self):
+            """Remplace le tableur de secours par une copie du tableur principal
+            (utilisé après une modification manuelle du tableur). Garde de la
+            sécurité : le principal doit d'abord pouvoir être relu, sinon le
+            secours n'est PAS touché ; et la version précédente du secours est
+            conservée à côté (« … (version précédente).ods ») avant d'être
+            remplacée — une copie de secours ne doit jamais être écrasée par un
+            tableur abîmé sans possibilité de retour. Renvoie (ok, message)."""
+            principal = getattr(self, "_tableur_path", "") or ""
+            secours = (getattr(self, "_tableur_secours_path", "") or "").strip()
+            if not principal or not secours or not os.path.isfile(principal):
+                return False, "Tableur principal ou tableur de secours non configuré."
+            if os.path.normcase(os.path.abspath(secours)) == os.path.normcase(os.path.abspath(principal)):
+                return False, "Le tableur de secours est le même fichier que le tableur principal."
+            try:
+                from odf.opendocument import load as ods_load
+                ods_load(principal)
+            except Exception as ex:
+                return False, (f"Le tableur principal est illisible : la copie de secours n'a PAS été "
+                               f"touchée ({type(ex).__name__}: {ex}).")
+            try:
+                dossier = os.path.dirname(secours)
+                if dossier:
+                    os.makedirs(dossier, exist_ok=True)
+                if os.path.isfile(secours):
+                    base, ext = os.path.splitext(secours)
+                    shutil.copy2(secours, f"{base} (version précédente){ext}")
+                tmp = secours + ".tmp"
+                shutil.copy2(principal, tmp)
+                os.replace(tmp, secours)
+                return True, "Tableur de secours mis à jour."
+            except Exception as ex:
+                return False, f"Mise à jour du tableur de secours impossible : {type(ex).__name__}: {ex}"
+
+        def _surveiller_tableur_pour_secours(self):
+            """Après « ✏️ Modification tableur » : surveille le tableur principal
+            (sans bloquer Citron) et, à chaque enregistrement (fichier stable
+            depuis 3 secondes), met à jour le tableur de secours. S'arrête quand
+            le lien est coupé, quand un autre tableur est choisi, après une
+            nouvelle ouverture en modification, ou au bout de 6 heures."""
+            import time as _t
+            principal = getattr(self, "_tableur_path", "") or ""
+            self._secours_watch_gen = getattr(self, "_secours_watch_gen", 0) + 1
+            gen = self._secours_watch_gen
+
+            def run():
+                try:
+                    dernier = os.path.getmtime(principal)
+                except OSError:
+                    return
+                change_depuis = None
+                premiere_fois = True
+                fin = _t.time() + 6 * 3600
+                while _t.time() < fin:
+                    _t.sleep(2)
+                    if getattr(self, "_secours_watch_gen", 0) != gen:
+                        return
+                    if getattr(self, "_tableur_path", "") != principal or \
+                            not (getattr(self, "_tableur_secours_path", "") or "").strip():
+                        return
+                    try:
+                        m = os.path.getmtime(principal)
+                    except OSError:
+                        continue
+                    if m != dernier:
+                        dernier, change_depuis = m, _t.time()
+                        continue
+                    if change_depuis and _t.time() - change_depuis >= 3:
+                        change_depuis = None
+                        ok, msg = self._synchroniser_secours_depuis_principal()
+                        self._trace_recherche(f"Tableur de secours (après modification) : "
+                                              f"{'succès' if ok else 'ÉCHEC'} — {msg}")
+                        if (not ok) or premiere_fois:
+                            premiere_fois = False
+                            self.after(0, lambda ok=ok, msg=msg: (
+                                messagebox.showinfo("Tableur de secours", msg) if ok
+                                else messagebox.showwarning("Tableur de secours", msg)))
+
+            threading.Thread(target=run, daemon=True).start()
 
         def _chercher_titre_proche_tableur(self, titre):
             """Compare un titre au contenu du tableur pour éviter les
