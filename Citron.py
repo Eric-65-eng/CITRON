@@ -516,6 +516,24 @@ print("[BUILD] Compléter le tableur : case « Pièce de théâtre » -> champs 
       "(résumé, comédiens, mise en scène, année, affiche) puis bande-annonce YouTube "
       "« Bande annonce de la pièce de théâtre ... » ; copier/coller dans « Renseignements "
       "divers » et « Préciser la catégorie » (2026-10-09)")
+print("[BUILD] Compléter le tableur : case « Films d'animation » -> « Acteurs » devient « Voix française » ; "
+      "nouvelle source Wiki Doublage Francophone en premier (synopsis, affiche VOD, voix françaises, durée, "
+      "studio -> Renseignements divers), puis bande-annonce YouTube « du film d'animation », puis TMDB > AlloCiné "
+      "> autres ; mode d'emploi et Sites de recherches mis à jour (2026-10-17)")
+print("[BUILD] « Demander » de Brave (Ask Brave) en 2e position pour « Films d'animation » : fenêtre semi-automatique "
+      "(question ouverte dans le navigateur, réponse copiée puis collée et décodée, une question par champ vide) ; "
+      "bouton « 🦁 Demander à Brave » ; l'API Brave Answers reste en option avec clé (2026-10-18)")
+print("[BUILD] « Demander à Brave » : deux questions ajoutées, « Quelle est l'affiche de <titre> (<année>) ? » et "
+      "« Quelle est la bande annonce de <titre> (<année>) ? » ; le lien collé est repéré et inscrit dans "
+      "« Affiche » / « Bande-annonce » (2026-10-23)")
+print("[BUILD] « Demander à Brave » : bande-annonce — si la page collée ne contient aucune vidéo, repli sur la recherche YouTube / Dailymotion de Citron ; lecture de page élargie (Vimeo, .mp4/.m3u8) + indices en console (2026-10-24)")
+print("[BUILD] Voix du résumé : erreur 403 du service vocal Microsoft -> edge-tts mis à jour automatiquement (pip) puis nouvel essai, au lieu de retomber sur la voix Windows (2026-10-24)")
+print("[BUILD] « Demander à Brave » : lien d'image proxy de Brave décodé (affiche), page collée analysée pour y trouver la bande-annonce (YouTube / Dailymotion / AlloCiné) (2026-10-24)")
+print("[BUILD] « Demander à Brave » : bande-annonce AlloCiné acceptée (lien vidéo, ou lien relevé sur la fiche film) (2026-10-23)")
+print("[BUILD] AlloCiné : zone de recherche du site lue en premier, fiche choisie à l'année demandée ±1 an "
+      "(exacte d'abord), affiche relevée sur la fiche retenue (2026-10-18)")
+print("[BUILD] Voix française : format « Comédien (Personnage) » ; titres avec sous-titre (« X - Y ») : "
+      "variantes essayées sur TMDB, Wikidata et les moteurs (2026-10-17)")
 print("[BUILD] Recherche de fiches : liens de suivi Bing relatifs (/ck/a) decodes, adresses "
       "en clair detectees, moteurs en captcha/429 mis de cote 10 min (2026-10-04)")
 print("[BUILD] AlloCine : si aucun moteur de recherche ne repond, l'adresse de la fiche est "
@@ -532,6 +550,7 @@ print("[BUILD] Zoom vidéo : remplace le zoom à la molette (peu fiable, VLC "
       "interceptait souvent l'événement avant Tkinter, nécessitait un sous-"
       "classement Win32 dédié) par des raccourcis clavier +/- (et pavé "
       "numérique), 0 du pavé numérique ou touche 0 pour réinitialiser (2026-09-26)")
+print("[BUILD] Téléchargement YouTube : direct terminé / rediffusion pas encore prête, vidéo privée, réservée aux membres ou supprimée -> message clair au lieu de « Échec », pas de relances inutiles ; autres clients YouTube essayés (default, web_safari, mweb, tv) + cookies du navigateur si « confirmez que vous n'êtes pas un robot » (2026-10-18)")
 print("[BUILD] Capture d'écran : tente désormais ddagrab (Desktop Duplication API) "
       "avant gdigrab (BitBlt classique) -> capture fidèlement le rendu vidéo "
       "matériel (overlay Direct3D de VLC en décodage accéléré) que gdigrab peut "
@@ -1427,6 +1446,7 @@ try:
             self.completer_tableur_win_geometry = None
             self._tmdb_api_key = ""
             self._ia_api_key = ""
+            self._leo_api_key = ""
             self._search_sites_cfg = {}      # catégorie -> [ids de sites] (⚙ Sites de recherches)
             self._search_sites_custom = []   # sites ajoutés à la main [{id, nom, url}]
             self._tableur_secours_path = ""  # 2e tableur .ods : copie de secours (vide = désactivée)
@@ -1586,6 +1606,7 @@ try:
                 self.completer_tableur_win_geometry = d.get("completer_tableur_win", None)
                 self._tmdb_api_key = d.get("tmdb_api_key", "")
                 self._ia_api_key = d.get("ia_api_key", "")
+                self._leo_api_key = d.get("leo_api_key", "")
                 _ss = d.get("search_sites", {})
                 self._search_sites_cfg = _ss if isinstance(_ss, dict) else {}
                 _sc = d.get("search_sites_custom", [])
@@ -1625,6 +1646,7 @@ try:
                      "completer_tableur_win": getattr(self, "completer_tableur_win_geometry", None),
                      "tmdb_api_key": getattr(self, "_tmdb_api_key", ""),
                      "ia_api_key": getattr(self, "_ia_api_key", ""),
+                     "leo_api_key": getattr(self, "_leo_api_key", ""),
                      "search_sites": getattr(self, "_search_sites_cfg", {}),
                      "search_sites_custom": getattr(self, "_search_sites_custom", []),
                      "tableur_secours_path": getattr(self, "_tableur_secours_path", ""),
@@ -3795,6 +3817,43 @@ try:
                           height=36, width=280, fg_color="#7a3a9a").pack(side="left", padx=6)
             entry.bind("<Return>", go_play_and_dl)
 
+        # Erreurs yt-dlp pour lesquelles AUCUNE relance ne sert à rien : la vidéo
+        # n'est tout simplement pas téléchargeable à cet instant (ou plus).
+        _YDL_ERREURS_DEFINITIVES = (
+            (("live event has ended", "live stream recording is not available"),
+             "Ce direct est terminé mais YouTube n'a pas encore publié la rediffusion "
+             "(traitement parfois long : de quelques minutes à plusieurs heures). "
+             "Réessayez plus tard."),
+            (("this live event will begin", "premieres in", "premiere will begin"),
+             "Cette vidéo est un direct / une première pas encore commencée."),
+            (("private video",), "Vidéo privée : connexion au compte propriétaire nécessaire."),
+            (("members-only", "members only", "join this channel"),
+             "Vidéo réservée aux membres de la chaîne."),
+            (("video unavailable", "has been removed", "no longer available",
+              "account associated with this video has been terminated"),
+             "Vidéo supprimée ou indisponible."),
+            (("not available in your country", "blocked it in your country",
+              "geo restricted", "geo-restricted"),
+             "Vidéo bloquée dans votre pays."),
+            (("age-restricted", "confirm your age"),
+             "Vidéo soumise à une restriction d'âge (connexion nécessaire)."),
+        )
+
+        def _ydl_explain_error(self, err):
+            """Renvoie (message_français, definitive) pour une erreur yt-dlp.
+            definitive=True -> inutile de relancer avec un autre client."""
+            low = str(err or "").lower()
+            for mots, texte in self._YDL_ERREURS_DEFINITIVES:
+                if any(m in low for m in mots):
+                    return texte, True
+            if "sign in to confirm" in low or "not a bot" in low:
+                return ("YouTube demande de « confirmer que vous n'êtes pas un robot ». "
+                        "Mettez à jour yt-dlp : pip install -U yt-dlp", False)
+            if "http error 403" in low or "403: forbidden" in low:
+                return ("YouTube a refusé l'accès (403). "
+                        "Mettez à jour yt-dlp : pip install -U yt-dlp", False)
+            return (str(err or "erreur inconnue").replace("ERROR: ", "")[:200], False)
+
         def _ydl_base_opts(self, extra=None):
             """Options yt-dlp communes, avec plusieurs parades aux erreurs
             fréquentes rencontrées sur YouTube :
@@ -4143,6 +4202,10 @@ try:
                           "(pip install yt-dlp recommandé pour YouTube et autres sites)")
                 except Exception as ex:
                     print(f"[Internet] yt-dlp échec ({ex}) — lecture directe")
+                    _msg_fr, _def = self._ydl_explain_error(ex)
+                    if _def:
+                        print(f"[Internet] → {_msg_fr}")
+                        self.after(0, lambda m=_msg_fr: self._show_toast(f"⚠️ {m}", ms=9000, color="#8a2a2a"))
 
                 def _do_play():
                     try:
@@ -5227,20 +5290,56 @@ try:
                             "merge_output_format": "mp4",
                             "progress_hooks": [self._dl_progress_hook],
                         }
-                        # 1er essai : combinaison standard (android/ios/web)
-                        try:
-                            ydl_opts = self._ydl_base_opts(base_opts)
-                            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                                info = ydl.extract_info(url, download=True)
-                                dest = ydl.prepare_filename(info) if info else None
-                        except Exception as ex1:
-                            print(f"[Mémoire] 1er essai échoué ({ex1}) — nouvelle tentative (client android seul)")
-                            # 2e essai : client 'android' seul (souvent le plus fiable pour le téléchargement)
-                            ydl_opts2 = self._ydl_base_opts(base_opts)
-                            ydl_opts2["extractor_args"] = {"youtube": {"player_client": ["android"]}}
-                            with yt_dlp.YoutubeDL(ydl_opts2) as ydl:
-                                info = ydl.extract_info(url, download=True)
-                                dest = ydl.prepare_filename(info) if info else None
+                        # Essais successifs : combinaison standard, puis d'autres clients
+                        # YouTube, puis (si « pas un robot ») les cookies du navigateur.
+                        # On s'arrête dès qu'une erreur est DÉFINITIVE (direct terminé
+                        # non encore publié, vidéo privée/supprimée, etc.).
+                        tentatives = [
+                            ("standard", None, None),
+                            ("android", ["android"], None),
+                            ("default", ["default"], None),
+                            ("web_safari", ["web_safari"], None),
+                            ("mweb", ["mweb"], None),
+                            ("tv", ["tv"], None),
+                        ]
+                        derniere_ex = None
+                        for nom_t, clients, cookies in tentatives:
+                            try:
+                                ydl_opts = self._ydl_base_opts(base_opts)
+                                if clients:
+                                    ydl_opts["extractor_args"] = {"youtube": {"player_client": clients}}
+                                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                                    info = ydl.extract_info(url, download=True)
+                                    dest = ydl.prepare_filename(info) if info else None
+                                derniere_ex = None
+                                break
+                            except Exception as ex_t:
+                                derniere_ex = ex_t
+                                msg_fr, definitive = self._ydl_explain_error(ex_t)
+                                if definitive:
+                                    print(f"[Mémoire] Erreur définitive ({msg_fr}) — pas d'autre essai")
+                                    break
+                                print(f"[Mémoire] Essai '{nom_t}' échoué ({str(ex_t)[:120]}) — essai suivant")
+                        # Dernier recours si YouTube réclame une vérification anti-robot :
+                        # cookies d'un navigateur déjà connecté à YouTube.
+                        if derniere_ex is not None:
+                            low = str(derniere_ex).lower()
+                            if "sign in to confirm" in low or "not a bot" in low:
+                                for nav in ("edge", "chrome", "firefox", "brave"):
+                                    try:
+                                        ydl_opts = self._ydl_base_opts(base_opts)
+                                        ydl_opts["cookiesfrombrowser"] = (nav,)
+                                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                                            info = ydl.extract_info(url, download=True)
+                                            dest = ydl.prepare_filename(info) if info else None
+                                        derniere_ex = None
+                                        print(f"[Mémoire] Réussi avec les cookies de {nav}")
+                                        break
+                                    except Exception as ex_c:
+                                        derniere_ex = ex_c
+                                        print(f"[Mémoire] Cookies {nav} : {str(ex_c)[:100]}")
+                        if derniere_ex is not None:
+                            raise derniere_ex
                         if dest and not os.path.isfile(dest):
                             base, _ = os.path.splitext(dest)
                             for ext in (".mp4", ".webm", ".mkv", ".m4a"):
@@ -5258,9 +5357,11 @@ try:
                     self._hide_progress_toast()
                     self._downloading_safe_names.discard(safe)
                     if err or not dest or not os.path.isfile(dest):
+                        msg_fr, _def = self._ydl_explain_error(err) if err else ("fichier introuvable", False)
                         print(f"[Mémoire] Échec du téléchargement automatique : "
-                              f"{err or 'fichier introuvable'} (pip install yt-dlp)")
-                        self._show_toast("⚠️ Échec du téléchargement", ms=4500, color="#8a2a2a")
+                              f"{err or 'fichier introuvable'}")
+                        print(f"[Mémoire] → Explication : {msg_fr}")
+                        self._show_toast(f"⚠️ Téléchargement impossible : {msg_fr}", ms=9000, color="#8a2a2a")
                         if self.dl_win and self.dl_win.winfo_exists():
                             self.refresh_downloads_window()
                         return
@@ -9406,6 +9507,21 @@ try:
 "Les Archives du spectacle, SensCritique, TheatreOnline, puis Offi. La \n"
 "bande-annonce est cherchée sur YouTube (« Bande annonce de la pièce de \n"
 "théâtre … ») si TMDB n'en a pas fourni.\n"
+"   – Catégorie « Films d'animation » (et seulement elle) : « Acteurs » \n"
+"devient « Voix française » (noms séparés par « / »). La recherche \n"
+"commence par le Wiki Doublage Francophone (titre cherché, fiche dont \n"
+"l'année correspond à l'année indiquée) : synopsis, affiche VOD, voix \n"
+"françaises (format « Comédien (Personnage) », séparées par « / »), \n"
+"durée, et studio d'animation dans « Renseignements divers ». La bande-annonce est cherchée sur YouTube (« Bande annonce du \n"
+"film d'animation … »). Si des champs restent vides, les clics suivants \n"
+"ouvrent « Demander » de Brave (Ask Brave, 2e position, semi-automatique) : \n"
+"une fenêtre propose une question par champ vide ; « Poser la question » \n"
+"l'ouvre dans votre navigateur, vous copiez la réponse de Brave puis \n"
+"« Coller la réponse » la décode et remplit le champ (voix au format \n"
+"« Doubleur (Personnage) »). Le bouton « 🦁 Demander à Brave » rouvre cette \n"
+"fenêtre à tout moment. Ensuite : TMDB, AlloCiné, tv-programme.com, \n"
+"SensCritique, Plansamericains et l'IA. Pensez à indiquer l'année : sans elle, Citron \n"
+"prend la première fiche trouvée.\n"
 "   – Les champs « Renseignements divers » et « Préciser la catégorie » \n"
 "acceptent le copier/coller (Ctrl+C / Ctrl+V / Ctrl+X, clic droit).\n"
 "   – « ✅ Valider » : l'affiche et la bande-annonce sont téléchargées \n"
@@ -9480,7 +9596,10 @@ try:
 "connu, « 🔗 Autre site… » pour ajouter l'adresse d'un site de votre choix, \n"
 "« ↺ Ordre par défaut » pour tout rétablir, et 🌐 pour ouvrir le site dans \n"
 "votre navigateur et l'utiliser à la main. Les changements sont \n"
-"enregistrés aussitôt et valent dès la recherche suivante.\n"
+"enregistrés aussitôt et valent dès la recherche suivante. Pour « Films \n"
+"d'animation », l'ordre par défaut est : Wiki Doublage Francophone, Demander \n"
+"à Brave, TMDB, AlloCiné, tv-programme.com, SensCritique, Plansamericains, IA ; « RS \n"
+"Doublage » et « Planète Jeunesse » sont disponibles via « ➕ Ajouter ».\n"
 "• 📦 Exporter ma configuration / 📥 Importer une configuration → "
 "sauvegarder ou restaurer d'un coup votre bibliothèque, votre playlist et "
 "le lien vers votre tableur — très utile avant une réinstallation ou un "
@@ -10131,12 +10250,21 @@ try:
             win.status_label = self._creer_status_copiable(scroll)
             win.status_label.pack(fill="x", pady=(8, 0))
 
+            ctk.CTkButton(container, text="🦁 Demander à Brave (réponse à coller)", height=28,
+                          fg_color="transparent", border_width=1, text_color="#cccccc",
+                          command=lambda w=win: self._demander_brave_ouvrir(
+                              w, self._completer_tableur_lire_champs(w), self._categorie_recherche(w))
+                          ).pack(fill="x", pady=(8, 0))
             cle_row = ctk.CTkFrame(container, fg_color="transparent")
             cle_row.pack(fill="x", pady=(8, 0))
             ctk.CTkButton(cle_row, text="🔑 Clé API TMDB", height=26, width=1,
                           fg_color="transparent", border_width=1, text_color="#cccccc",
                           command=lambda w=win: self._completer_tableur_config_tmdb(w)).pack(
                 side="left", expand=True, fill="x", padx=(0, 4))
+            ctk.CTkButton(cle_row, text="🔑 Clé API Brave (facultatif)", height=26, width=1,
+                          fg_color="transparent", border_width=1, text_color="#cccccc",
+                          command=lambda w=win: self._completer_tableur_config_leo(w)).pack(
+                side="left", expand=True, fill="x", padx=4)
             ctk.CTkButton(cle_row, text="🤖 Configurer l'IA", height=26, width=1,
                           fg_color="transparent", border_width=1, text_color="#cccccc",
                           command=lambda w=win: self._completer_tableur_config_ia(w)).pack(
@@ -10339,25 +10467,45 @@ try:
             except Exception:
                 return False
 
+        def _completer_tableur_est_animation(self, win):
+            """True UNIQUEMENT si la case à cocher « Films d'animation » est
+            cochée dans « Compléter le tableur » (on lit la case elle-même,
+            pas le texte libre de « Préciser la catégorie »)."""
+            try:
+                v = win._categorie_vars.get("Films d'animation")
+                return bool(v and v.get())
+            except Exception:
+                return False
+
         def _completer_tableur_maj_libelles(self, win):
             """Renomme deux champs du formulaire selon la catégorie :
+            - « Films d'animation » cochée (et seulement alors) : « Acteurs »
+              devient « Voix française » ;
             - « Pièce de théâtre » cochée : « Acteurs » devient « Comédiens »
               et « Réalisateur (Filmeur) » devient « Mise en scène » ;
             - sinon (autre case, aucune case) : libellés d'origine.
             Seuls les libellés changent : les champs gardent le même rôle
             (colonnes « Personnes » et « Réalisateur » du tableur)."""
             theatre = self._completer_tableur_est_theatre(win)
+            animation = self._completer_tableur_est_animation(win)
+            # Une seule case peut être cochée : théâtre et animation s'excluent.
+            if theatre:
+                texte_personnes = "Comédiens (séparés par « / »)"
+            elif animation:
+                texte_personnes = "Voix française (séparées par « / »)"
+            else:
+                texte_personnes = "Acteurs (séparés par « / »)"
             libelles = {
-                "personnes": ("Acteurs (séparés par « / »)", "Comédiens (séparés par « / »)"),
-                "realisateur": ("Réalisateur (Filmeur)", "Mise en scène"),
+                "personnes": texte_personnes,
+                "realisateur": "Mise en scène" if theatre else "Réalisateur (Filmeur)",
             }
             etiquettes = getattr(win, "_labels_champs", {}) or {}
-            for cle, (normal, theatral) in libelles.items():
+            for cle, texte in libelles.items():
                 lbl = etiquettes.get(cle)
                 if lbl is None:
                     continue
                 try:
-                    lbl.configure(text=theatral if theatre else normal)
+                    lbl.configure(text=texte)
                 except Exception:
                     pass
 
@@ -11090,6 +11238,256 @@ try:
                 "Offi", titre, annee_cible, "offi.fr/theatre",
                 r"offi\.fr/theatre/[^/?#]+/[^/?#]+-\d+\.html", self._offi_analyser)
 
+        # ══════════════════════════════════════════════════════════════
+        # 🎙️ Wiki Doublage Francophone (wikidoublage.fandom.com/fr) —
+        # source n°1 de la catégorie « Films d'animation ». Le wiki est un
+        # site Fandom (MediaWiki) : on passe par son API publique plutôt que
+        # par la zone de recherche (JavaScript, inutilisable depuis Citron).
+        # Même démarche qu'à la main : chercher le titre, ouvrir la fiche du
+        # film dont l'année correspond, puis lire synopsis, affiche VOD, voix
+        # françaises, durée et studio.
+        # ══════════════════════════════════════════════════════════════
+        _WIKIDOUBLAGE_BASE = "https://wikidoublage.fandom.com/fr"
+
+        def _wikidoublage_get(self, url, timeout=15):
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Citron/1.0 (usage personnel)",
+                       "Accept": "application/json, text/html;q=0.9",
+                       "Accept-Language": "fr-FR,fr;q=0.9"}
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8", errors="ignore")
+
+        def _wikidoublage_api(self, **params):
+            params["format"] = "json"
+            url = self._WIKIDOUBLAGE_BASE + "/api.php?" + urllib.parse.urlencode(params)
+            return json.loads(self._wikidoublage_get(url))
+
+        def _wikidoublage_sections(self, html_text):
+            """Découpe la page en [(titre_de_section, html)] d'après les
+            titres <h2>-<h4>."""
+            import re
+            morceaux = re.split(r"(?is)(<h[1-4]\b[^>]*>.*?</h[1-4]>)", html_text)
+            sections = [("", morceaux[0])]
+            for i in range(1, len(morceaux), 2):
+                titre = self._tpa_texte(morceaux[i]).replace("[]", "").strip()
+                corps = morceaux[i + 1] if i + 1 < len(morceaux) else ""
+                sections.append((titre, corps))
+            return sections
+
+        def _wikidoublage_fiche_technique(self, html_text):
+            """Paires « libellé -> valeur » : encadré Fandom (pi-data) ou, à
+            défaut, lignes « Libellé : valeur » de la page."""
+            import re
+            paires = {}
+            for lbl, val in re.findall(
+                    r'(?is)<h3[^>]*class="[^"]*pi-data-label[^"]*"[^>]*>(.*?)</h3>\s*'
+                    r'<div[^>]*class="[^"]*pi-data-value[^"]*"[^>]*>(.*?)</div>', html_text):
+                l, v = self._tpa_texte(lbl).casefold().strip(" :"), self._tpa_texte(val)
+                if l and v and l not in paires:
+                    paires[l] = v
+            for bloc in self._tpa_blocs(html_text):
+                t = self._tpa_texte(bloc)
+                m = re.match(r"^([A-Za-zÀ-ÿ' ()]{3,45}?)\s*:\s*(.+)$", t)
+                if m:
+                    l = m.group(1).casefold().strip()
+                    if l not in paires:
+                        paires[l] = m.group(2).strip()
+            return paires
+
+        def _wikidoublage_affiche(self, html_text):
+            """Adresse de l'affiche : celle dont le nom ou le texte alternatif
+            contient « VOD » si elle existe, sinon la première image de
+            l'encadré. Adresse nettoyée de la miniature (taille d'origine) ;
+            webp/svg/gif et drapeaux/logos écartés."""
+            import re
+            candidates = []
+            for m in re.finditer(r"(?is)<img\b([^>]*)>", html_text):
+                attrs = m.group(1)
+                src = ""
+                for nom in ("data-src", "src"):
+                    ms = re.search(nom + r'\s*=\s*"([^"]+)"', attrs, re.I)
+                    if ms and not ms.group(1).startswith("data:"):
+                        src = ms.group(1)
+                        break
+                if not src or "static.wikia.nocookie.net" not in src and "vignette" not in src:
+                    continue
+                alt = (re.search(r'alt\s*=\s*"([^"]*)"', attrs, re.I) or [None, ""])[1]
+                nomf = urllib.parse.unquote(src.split("/revision/")[0].rsplit("/", 1)[-1])
+                if re.search(r"(drapeau|flag|logo|icon|ic[oô]ne|wikia|fandom)", nomf + " " + alt, re.I):
+                    continue
+                if not re.search(r"\.(jpe?g|png)$", nomf, re.I):
+                    continue
+                propre = re.sub(r"/revision/latest/.*$", "/revision/latest", src.split("?")[0])
+                if not self._format_image_autorise(propre):
+                    continue
+                candidates.append((bool(re.search(r"vod", nomf + " " + alt, re.I)), propre))
+            for est_vod, url in candidates:
+                if est_vod:
+                    return url
+            return candidates[0][1] if candidates else ""
+
+        def _wikidoublage_voix(self, sections):
+            """Voix françaises, séparées par « / », au format
+            « Comédien (Personnage) ». Sur le wiki, la section « Voix françaises »
+            liste « Comédien : Personnage » (le comédien est un lien bleu) ;
+            si une fiche inverse l'ordre, le côté qui porte le lien est pris
+            pour le comédien. La ligne « voix additionnelles » est ignorée."""
+            import re
+            motif_vf = re.compile(r"voix\s+fran[cç]aises?|doublage\s*(?:france|fran[cç]ais|\(?vf)|"
+                                  r"distribution\s*(?:vf|fran[cç]aise)|version\s+fran[cç]aise", re.I)
+            motif_large = re.compile(r"distribution|doublage|voix", re.I)
+            choisies = [c for t, c in sections if motif_vf.search(t)]
+            if not choisies:
+                choisies = [c for t, c in sections
+                            if motif_large.search(t) and not re.search(
+                                r"originales?|vo\b|qu[ée]b[ée]c|additionnelles?", t, re.I)]
+            noms = []
+            for corps in choisies:
+                lignes = re.findall(r"(?is)<li\b[^>]*>(.*?)</li>", corps)
+                lignes += re.findall(r"(?is)<tr\b[^>]*>(.*?)</tr>", corps)
+                for li in lignes:
+                    t = self._tpa_texte(li)
+                    t = re.sub(r"<\s*WP\s*>|\bWP\b", "", t).strip()
+                    if not t or re.match(r"(?i)\s*voix\s+additionnelles?", t):
+                        continue
+                    if ":" not in t:
+                        continue
+                    gauche, droite = t.split(":", 1)
+                    liens = [self._tpa_texte(x) for x in re.findall(r"(?is)<a\b[^>]*>(.*?)</a>", li)]
+                    liens = [x for x in liens if x]
+                    if liens and not any(x in gauche for x in liens) and any(x in droite for x in liens):
+                        gauche, droite = droite, gauche  # ordre inversé : « Personnage : Comédien »
+                    perso = re.sub(r"\s+", " ", droite).strip(" ,;.-–")
+                    perso = re.sub(r"\s*\(([^)]*)\)", r" - \1", perso).strip()  # pas de parenthèses imbriquées
+                    if len(perso) > 60:
+                        perso = ""
+                    gauche = re.sub(r"\([^)]*\)", "", gauche).strip(" ,;.-–")
+                    for n in re.split(r"\s*(?:,| / | et |&)\s*", gauche):
+                        n = n.strip(" ,;.-–")
+                        if (4 <= len(n) <= 40 and not re.search(r"\d", n) and 2 <= len(n.split()) <= 5):
+                            entree = f"{n} ({perso})" if perso else n
+                            if entree not in noms:
+                                noms.append(entree)
+            return " / ".join(noms)
+
+        def _wikidoublage_analyser(self, html_text, titre_page):
+            """Lit une fiche de film d'animation du wiki : titre, année,
+            durée (minutes), synopsis, affiche, voix françaises, studio
+            (-> « Renseignements divers ») et réalisateur."""
+            import re
+            data = {"titre": re.sub(r"\s*\([^)]*\)\s*$", "", titre_page).strip()}
+            fiche = self._wikidoublage_fiche_technique(html_text)
+            plat = self._tpa_texte(html_text)
+
+            def valeur(motif, exclure=None):
+                for l, v in fiche.items():
+                    if re.search(motif, l, re.I) and not (exclure and re.search(exclure, l, re.I)):
+                        return v
+                return ""
+
+            a = valeur(r"ann[ée]e|sortie|production$|date")
+            m = re.search(r"\b(19\d{2}|20\d{2})\b", a) or re.search(r"\((\d{4})\)\s*$", titre_page) \
+                or re.search(r"(?:Ann[ée]e|Sortie)[^.]{0,60}?\b(19\d{2}|20\d{2})\b", plat)
+            if m:
+                data["annee"] = m.group(1)
+            d = valeur(r"dur[ée]e")
+            md = re.search(r"(\d+)\s*h(?:eures?)?\s*(\d+)?", d, re.I)
+            if md:
+                data["duree"] = str(int(md.group(1)) * 60 + int(md.group(2) or 0))
+            else:
+                md = re.search(r"(\d+)\s*(?:min|mn)", d, re.I)
+                if md:
+                    data["duree"] = md.group(1)
+            studio = (valeur(r"studio d.animation") or valeur(r"soci[ée]t[ée]s? de production")
+                      or valeur(r"^production") or valeur(r"^studios?$|^studio\b",
+                                                          exclure=r"doublage|enregistrement|mixage|adaptation"))
+            if studio:
+                data["renseignements"] = re.split(r"\s*[,;/]\s*|\s+et\s+", studio)[0].strip()
+            r = valeur(r"r[ée]alisa")
+            if r:
+                data["realisateur"] = " / ".join(x for x in re.split(r"\s*(?:,|;|/|\bet\b)\s*", r) if x)
+            sections = self._wikidoublage_sections(html_text)
+            for t, corps in sections:
+                if re.search(r"synopsis|r[ée]sum[ée]|histoire|pr[ée]sentation|l.intrigue", t, re.I):
+                    ps = [self._tpa_texte(p) for p in re.findall(r"(?is)<p\b[^>]*>(.*?)</p>", corps)]
+                    ps = [p for p in ps if len(p) > 30]
+                    if ps:
+                        data["resume"] = "\n\n".join(ps)
+                        break
+            if not data.get("resume"):
+                for p in re.findall(r"(?is)<p\b[^>]*>(.*?)</p>", sections[0][1]):
+                    tp = self._tpa_texte(p)
+                    if len(tp) > 80 and not tp.startswith("Ceci est"):
+                        data["resume"] = tp
+                        break
+            aff = self._wikidoublage_affiche(html_text)
+            if aff:
+                data["affiche"] = aff
+            voix = self._wikidoublage_voix(sections)
+            if voix:
+                data["personnes"] = voix
+            return data
+
+        def _rechercher_wikidoublage(self, titre, annee_cible=None):
+            """Source « Wiki Doublage Francophone » pour les films d'animation :
+            retrouve la fiche du film (titre cherché, puis choix de la fiche
+            dont l'année correspond à l'année indiquée), lit le synopsis,
+            l'affiche VOD, les voix françaises (séparées par « / »), la durée
+            et le studio d'animation. Renvoie un dict ou None (jamais de
+            fiche au hasard : mieux vaut ne rien remplir qu'un mauvais film)."""
+            import re
+            self._trace_recherche(f"Wiki Doublage : recherche de « {titre} »" +
+                                  (f" ({annee_cible})" if annee_cible else "") + "…")
+            cible = self._tpa_norm(titre)
+            try:
+                rep = self._wikidoublage_api(action="query", list="search", srsearch=titre,
+                                             srnamespace=0, srlimit=10)
+            except Exception as ex:
+                self._trace_recherche(f"Wiki Doublage : recherche en échec — {type(ex).__name__}: {ex}")
+                return None
+            pages = [x.get("title", "") for x in ((rep.get("query") or {}).get("search") or [])]
+            retenues = []
+            for page in pages:
+                propre = re.sub(r"\s*\([^)]*\)\s*$", "", page)
+                if self._tpa_score_titre(cible, self._tpa_norm(propre)) is None:
+                    continue
+                try:
+                    r2 = self._wikidoublage_api(action="parse", page=page, prop="text", redirects=1,
+                                                disableeditsection=1, disabletoc=1)
+                    html_text = ((r2.get("parse") or {}).get("text") or {}).get("*", "")
+                except Exception as ex:
+                    self._trace_recherche(f"Wiki Doublage : lecture de « {page} » en échec — "
+                                          f"{type(ex).__name__}: {ex}")
+                    continue
+                if not html_text:
+                    continue
+                data = self._wikidoublage_analyser(html_text, page)
+                data["source"] = f"{self._WIKIDOUBLAGE_BASE}/wiki/" + urllib.parse.quote(page.replace(" ", "_"))
+                retenues.append(data)
+                if len(retenues) >= 6:
+                    break
+            if not retenues:
+                self._trace_recherche(f"Wiki Doublage : aucune fiche trouvée pour « {titre} »")
+                return None
+            choix = None
+            if annee_cible and str(annee_cible).isdigit():
+                a = int(annee_cible)
+                exact = [d for d in retenues if str(d.get("annee", "")) == str(a)]
+                proche = [d for d in retenues if str(d.get("annee", "")).isdigit()
+                          and abs(int(d["annee"]) - a) <= 1]
+                inconnue = [d for d in retenues if not d.get("annee")]
+                choix = (exact or proche or (inconnue if len(retenues) == 1 else []) or [None])[0]
+                if choix is None:
+                    self._trace_recherche(f"Wiki Doublage : {len(retenues)} fiche(s) pour « {titre} », "
+                                          f"aucune de {a}, rejeté")
+                    return None
+            else:
+                choix = retenues[0]
+                if len(retenues) > 1:
+                    choix["_info"] = (f"{len(retenues)} fiches trouvées sur le Wiki Doublage : la première a été "
+                                      f"retenue ({choix['source']}). Indique l'année pour en choisir une autre.")
+            return choix
+
         def _rechercher_bande_annonce_dans_resultat(self, resultat, titre_ba, annee_ba, libelle="du film"):
             """Recherche de la bande-annonce (inchangée : YouTube, puis
             repli sur Dailymotion) et stockage dans resultat["bande_annonce"].
@@ -11169,6 +11567,23 @@ try:
                 "theatreonline": {"nom": "TheatreOnline", "fn": self._rechercher_theatreonline,
                                   "cfg": None, "url": "https://www.theatreonline.com/"},
                 "offi": {"nom": "Offi", "fn": self._rechercher_offi, "cfg": None, "url": "https://www.offi.fr/"},
+                "askbrave": {"nom": "Demander à Brave (Ask Brave, réponse à coller)",
+                             "fn": self._demander_brave_etape, "cfg": None,
+                             "url": "https://search.brave.com/ask"},
+                "leo": {"nom": "Brave Answers (API, clé payante)", "fn": self._rechercher_leo,
+                        "cfg": "_leo_api_key", "url": "https://search.brave.com/ask"},
+                "wikidoublage": {"nom": "Wiki Doublage Francophone", "fn": self._rechercher_wikidoublage,
+                                 "cfg": None, "url": "https://wikidoublage.fandom.com/fr/"},
+                # Autres sites de doublage connus : lecture générique (titre, résumé,
+                # affiche, année) ; à ajouter à la main dans ⚙ Paramètres → Sites de recherches.
+                "rsdoublage": {"nom": "RS Doublage",
+                               "fn": lambda t, a: self._rechercher_site_perso(
+                                   {"nom": "RS Doublage", "url": "https://www.rsdoublage.com/"}, t, a),
+                               "cfg": None, "url": "https://www.rsdoublage.com/"},
+                "planetejeunesse": {"nom": "Planète Jeunesse",
+                                    "fn": lambda t, a: self._rechercher_site_perso(
+                                        {"nom": "Planète Jeunesse", "url": "https://www.planete-jeunesse.com/"}, t, a),
+                                    "cfg": None, "url": "https://www.planete-jeunesse.com/"},
             }
             for c in (getattr(self, "_search_sites_custom", None) or []):
                 try:
@@ -11184,6 +11599,11 @@ try:
             autres cases, comme avant)."""
             if categorie == "Pièce de théâtre":
                 return ["tmdb", "tpa", "lads", "senscritique_theatre", "theatreonline", "offi"]
+            if categorie == "Films d'animation":
+                # Wiki Doublage Francophone d'abord (synopsis, affiche VOD, voix françaises,
+                # durée, studio), puis TMDB, puis AlloCiné, puis les autres sources.
+                return ["wikidoublage", "askbrave", "tmdb", "allocine", "tvprog", "senscritique",
+                        "plansamericains", "ia"]
             return ["tmdb", "tvprog", "allocine", "senscritique", "plansamericains", "ia"]
 
         def _sites_recherche_ids(self, categorie):
@@ -11191,6 +11611,13 @@ try:
             l'utilisateur (ou l'ordre par défaut s'il n'a rien modifié)."""
             cfg = getattr(self, "_search_sites_cfg", None) or {}
             ids = cfg.get(categorie)
+            # Ancien ordre par défaut « Films d'animation » jamais modifié à la main :
+            # on passe au nouvel ordre par défaut (Wiki Doublage en premier).
+            if categorie == "Films d'animation" and ids in (
+                    ["tmdb", "tvprog", "allocine", "senscritique", "plansamericains", "ia"],
+                    ["wikidoublage", "tmdb", "allocine", "tvprog", "senscritique", "plansamericains", "ia"],
+                    ["wikidoublage", "leo", "tmdb", "allocine", "tvprog", "senscritique", "plansamericains", "ia"]):
+                ids = None
             if not isinstance(ids, list):
                 ids = self._sites_recherche_defaut(categorie)
             return list(ids)
@@ -11248,18 +11675,28 @@ try:
                 win._recherche_etape = 0
                 win._recherche_titre_ref = ref
 
+            animation = (cat == "Films d'animation")
             if theatre:
                 champs_a_completer = ("annee", "resume", "personnes", "realisateur", "affiche")
+            elif animation:
+                # « Renseignements divers » = studio d'animation (Wiki Doublage).
+                champs_a_completer = ("annee", "resume", "personnes", "realisateur",
+                                      "type", "duree", "affiche", "renseignements")
             else:
                 champs_a_completer = ("annee", "resume", "personnes", "realisateur",
                                       "type", "duree", "affiche")
             noms_champs = {"annee": "Année", "resume": "Résumé / synopsis",
-                           "personnes": "Comédiens" if theatre else "Acteurs",
+                           "personnes": ("Comédiens" if theatre else
+                                         "Voix française" if animation else "Acteurs"),
                            "realisateur": "Mise en scène" if theatre else "Réalisateur",
                            "type": "Type", "duree": "Durée", "affiche": "Affiche",
+                           "renseignements": "Renseignements divers",
                            "bande_annonce": "Bande-annonce"}
             manquants = [c for c in champs_a_completer if not champs_actuels.get(c)]
             ba_vide = not champs_actuels.get("bande_annonce")
+            # Transmis aux sources qui posent une question par champ (Léo).
+            self._recherche_manquants = list(manquants)
+            self._recherche_categorie_courante = cat
 
             if not manquants and not ba_vide:
                 win.status_label.configure(
@@ -11282,6 +11719,23 @@ try:
             nom, fn, _cfg = sources[etape]
             suivante = (etape + 1) % len(sources)
             derniere = (etape == len(sources) - 1)
+
+            if manquants and fn == self._demander_brave_etape:
+                # Ask Brave ne se lit pas automatiquement : on ouvre la fenêtre
+                # « Demander à Brave » (question -> navigateur, réponse -> collée).
+                win._recherche_etape = suivante
+                info = (f"Source : {nom}. Suis la fenêtre « Demander à Brave », ou clique sur "
+                        f"« Poursuivre » pour passer à {sources[suivante][0]}.")
+                if sautees:
+                    info += f" ({', '.join(sautees)} ignoré(e) : non configuré(e).)"
+                win.status_label.configure(text=info, text_color="#cccccc")
+                try:
+                    win.search_btn.configure(state="normal",
+                                             text=f"🔎 Poursuivre la recherche sur {sources[suivante][0]}")
+                except Exception:
+                    pass
+                self._demander_brave_ouvrir(win, champs_actuels, cat)
+                return
 
             try:
                 win.search_btn.configure(state="disabled", text="⏳ Recherche en cours…")
@@ -11326,7 +11780,8 @@ try:
                     annee_ba = resultat.get("annee") or annee_cible
                     self._rechercher_bande_annonce_dans_resultat(
                         resultat, titre_ba, annee_ba,
-                        libelle="de la pièce de théâtre" if theatre else "du film")
+                        libelle=("de la pièce de théâtre" if theatre else
+                                 "du film d'animation" if animation else "du film"))
 
                 if manquants:
                     win._recherche_etape = suivante
@@ -11647,6 +12102,22 @@ try:
                 self._trace_recherche(f"Affiche : échec du téléchargement de {url} — {type(ex).__name__}: {ex}")
                 return None
 
+        def _variantes_titre_recherche(self, titre):
+            """Formes du titre à essayer auprès d'un moteur ou d'une API :
+            titre tel quel, puis sans le tiret/deux-points qui sépare le
+            sous-titre (« 101 dalmatiens 2 - Sur la trace des héros » ->
+            « 101 dalmatiens 2 Sur la trace des héros »), puis la partie
+            avant ce séparateur (« 101 dalmatiens 2 »)."""
+            import re
+            t = (titre or "").strip()
+            sans = re.sub(r"\s+[-–—:]\s+|\s*:\s+", " ", t).strip()
+            avant = re.split(r"\s+[-–—]\s+|\s*:\s+", t, maxsplit=1)[0].strip()
+            out = []
+            for v in (t, sans, avant):
+                if v and len(v) >= 4 and v not in out:
+                    out.append(v)
+            return out
+
         def _titres_similaires(self, a, b, seuil=0.5):
             """Compare deux titres de façon tolérante (accents, casse,
             ponctuation) pour vérifier qu'une page trouvée sur internet
@@ -11686,8 +12157,24 @@ try:
             if not candidats:
                 return None
             if annee_cible:
+                # Même ordre de préférence que le Wiki Doublage : année exacte,
+                # puis ±1 an (AlloCiné donne souvent l'année de production,
+                # ex. 2014, alors que la sortie en salle est en 2015), puis
+                # fiche sans année connue.
                 for d in candidats:
-                    if not d.get("annee") or d["annee"] == annee_cible:
+                    if d.get("annee") and d["annee"] == annee_cible:
+                        return d
+                if str(annee_cible).isdigit():
+                    cible = int(annee_cible)
+                    proches = [d for d in candidats
+                               if str(d.get("annee") or "").isdigit() and abs(int(d["annee"]) - cible) <= 1]
+                    if proches:
+                        self._trace_recherche(
+                            f"{nom_source} : fiche retenue avec l'année {proches[0]['annee']} "
+                            f"(année demandée {annee_cible}, écart de 1 an accepté)")
+                        return proches[0]
+                for d in candidats:
+                    if not d.get("annee"):
                         return d
                 self._trace_recherche(
                     f"{nom_source} : {len(candidats)} fiche(s) trouvée(s) pour « {titre} », "
@@ -11993,6 +12480,7 @@ try:
             import html as html_mod
             import time
             import base64
+            requete = re.sub(r"\s+[-–—]\s+", " ", requete or "")
             q = requete + (f" site:{site_filtre}" if site_filtre else "")
             # En-têtes de navigateur « classique » : les moteurs renvoient
             # une page anti-robot (sans aucun résultat) aux requêtes dont
@@ -12311,11 +12799,19 @@ try:
             search_url = ("https://api.themoviedb.org/3/search/movie?api_key="
                           + urllib.parse.quote(api_key) + "&language=fr-FR&query="
                           + urllib.parse.quote(titre))
-            req = urllib.request.Request(search_url)
-            with urllib.request.urlopen(req, timeout=10) as r:
-                data = json.loads(r.read().decode("utf-8"))
-            results = [f for f in (data.get("results") or [])
-                       if self._titres_similaires(titre, f.get("title") or "")]
+            results = []
+            for variante in self._variantes_titre_recherche(titre):
+                url_v = search_url.rsplit("&query=", 1)[0] + "&query=" + urllib.parse.quote(variante)
+                req = urllib.request.Request(url_v)
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    data = json.loads(r.read().decode("utf-8"))
+                results = [f for f in (data.get("results") or [])
+                           if self._titres_similaires(titre, f.get("title") or "")
+                           or self._titres_similaires(titre, f.get("original_title") or "")]
+                if results:
+                    if variante != titre:
+                        self._trace_recherche(f"TMDB : résultat trouvé avec la forme « {variante} »")
+                    break
             if not results:
                 self._trace_recherche(f"TMDB : aucun résultat correspondant au titre « {titre} »")
                 return None
@@ -12400,9 +12896,13 @@ try:
 
             api = "https://www.wikidata.org/w/api.php?format=json&"
             try:
-                rech = _get(api + "action=wbsearchentities&type=item&limit=10&language=fr&uselang=fr&search="
-                            + urllib.parse.quote(titre))
-                ids = [x["id"] for x in (rech.get("search") or []) if x.get("id")]
+                ids = []
+                for variante in self._variantes_titre_recherche(titre):
+                    rech = _get(api + "action=wbsearchentities&type=item&limit=10&language=fr&uselang=fr&search="
+                                + urllib.parse.quote(variante))
+                    ids = [x["id"] for x in (rech.get("search") or []) if x.get("id")]
+                    if ids:
+                        break
                 if not ids:
                     self._trace_recherche(f"Wikidata : aucune entrée pour « {titre} »")
                     return []
@@ -12448,6 +12948,41 @@ try:
                 " ; ".join(f"{lab} (cfilm={i}, années {a or '?'})" for _q, i, lab, a in trouves[:3]))
             return [f"https://www.allocine.fr/film/fichefilm_gen_cfilm={i}.html" for _q, i, _l, _a in trouves[:3]]
 
+        def _allocine_urls_via_recherche_site(self, titre):
+            """Reproduit la zone de recherche d'AlloCiné : la page de résultats
+            du site (allocine.fr/rechercher/?q=titre) est lue directement et
+            les adresses de fiches film (…fichefilm_gen_cfilm=N.html) sont
+            relevées dans l'ordre de la page (5 au maximum). Si le site ne
+            répond pas ou n'affiche aucune fiche dans le HTML (résultats
+            chargés par JavaScript), la raison est tracée et Citron passe
+            aux moteurs de recherche puis à Wikidata. Le titre est essayé tel
+            quel, puis sans son sous-titre."""
+            import re
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Citron/1.0 (usage personnel)",
+                       "Accept": "text/html,application/xhtml+xml",
+                       "Accept-Language": "fr-FR,fr;q=0.9"}
+            for variante in self._variantes_titre_recherche(titre):
+                url = "https://www.allocine.fr/rechercher/?q=" + urllib.parse.quote(variante)
+                try:
+                    req = urllib.request.Request(url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=12) as r:
+                        html_text = r.read().decode("utf-8", errors="ignore")
+                except Exception as ex:
+                    self._trace_recherche(f"AlloCiné (zone de recherche) : échec sur « {variante} » — "
+                                          f"{type(ex).__name__}: {ex}")
+                    continue
+                ids = []
+                for m in re.finditer(r"fichefilm_gen_cfilm=(\d+)", html_text):
+                    if m.group(1) not in ids:
+                        ids.append(m.group(1))
+                if ids:
+                    self._trace_recherche(f"AlloCiné (zone de recherche) : {len(ids)} fiche(s) pour « {variante} » "
+                                          f"→ cfilm {', '.join(ids[:5])}")
+                    return [f"https://www.allocine.fr/film/fichefilm_gen_cfilm={i}.html" for i in ids[:5]]
+                self._trace_recherche(f"AlloCiné (zone de recherche) : page de {len(html_text)} octets sans fiche "
+                                      f"film pour « {variante} » (résultats probablement chargés par JavaScript)")
+            return []
+
         def _rechercher_allocine(self, titre, annee_cible=None, affiche_via_onglet=False):
             """Recherche best-effort sur AlloCiné : la ou les fiches film
             sont retrouvées via DuckDuckGo (l'ancienne page de recherche
@@ -12468,8 +13003,10 @@ try:
             l'année et relancer la recherche pour départager)."""
             import re
             headers = {"User-Agent": "Mozilla/5.0 (compatible; Citron/1.0; usage personnel)"}
-            film_urls = self._rechercher_url_duckduckgo(f"{titre} film", "allocine.fr/film/fichefilm", max_resultats=3)
-            film_urls = [u for u in film_urls if "allocine.fr/film/fichefilm" in u]
+            film_urls = self._allocine_urls_via_recherche_site(titre)
+            if not film_urls:
+                film_urls = self._rechercher_url_duckduckgo(f"{titre} film", "allocine.fr/film/fichefilm", max_resultats=3)
+                film_urls = [u for u in film_urls if "allocine.fr/film/fichefilm" in u]
             if not film_urls:
                 self._trace_recherche(
                     f"AlloCiné : aucun moteur de recherche n'a renvoyé de fiche film pour « {titre} », "
@@ -12521,6 +13058,8 @@ try:
                 if affiche_via_onglet:
                     data["_html"] = html_film
                 candidats.append(data)
+                if annee_cible and data.get("annee") == annee_cible:
+                    break
 
             choisi = self._choisir_candidat_film("AlloCiné", titre, annee_cible, candidats)
             if choisi is not None:
@@ -12791,6 +13330,593 @@ try:
                 "source": f"IA ({modele})",
             }
 
+        # ══════════════════════════════════════════════════════════════
+        # 🦁 Brave Answers (API) — source n°2 des films d'animation.
+        # Léo, l'assistant du navigateur Brave, n'a pas d'API : on utilise
+        # l'IA « Answers » de Brave Search (même moteur de réponses, via
+        # l'API officielle, clé requise). Une question précise PAR CHAMP
+        # vide ; chaque réponse (une phrase, une liste, plusieurs lignes,
+        # avec ou sans mise en forme) est décodée séparément.
+        # ══════════════════════════════════════════════════════════════
+        def _leo_nettoyer(self, texte):
+            """Retire mise en forme Markdown, balises et renvois [1] d'une réponse."""
+            import re
+            t = texte or ""
+            t = re.sub(r"(?is)<[^>]+>", "", t)
+            t = re.sub(r"\[\d+(?:\s*,\s*\d+)*\]", "", t)
+            t = t.replace("**", "").replace("__", "")
+            t = re.sub(r"(?m)^\s*#{1,6}\s*", "", t)
+            t = t.replace("\u00a0", " ")
+            t = re.sub(r" {2,}", " ", t)  # les tabulations (colonnes copiées) sont conservées
+            return t.strip()
+
+        def _leo_poser_question(self, question, cle, delai=45):
+            """Une question à Brave Answers (réponse unique, sans flux).
+            Renvoie le texte nettoyé de la réponse, ou "" (échec, « inconnu »,
+            « je n'ai pas trouvé »…). Les raisons sont tracées."""
+            import re, time
+            corps = json.dumps({"model": "brave", "stream": False,
+                                "messages": [{"role": "user", "content": question}]}).encode("utf-8")
+            req = urllib.request.Request(
+                "https://api.search.brave.com/res/v1/chat/completions", data=corps,
+                headers={"Content-Type": "application/json", "Accept": "application/json",
+                         "X-Subscription-Token": cle})
+            try:
+                with urllib.request.urlopen(req, timeout=delai) as r:
+                    rep = json.loads(r.read().decode("utf-8", errors="ignore"))
+            except urllib.error.HTTPError as ex:
+                try:
+                    detail = ex.read().decode("utf-8", errors="ignore")[:200]
+                except Exception:
+                    detail = ""
+                self._trace_recherche(f"Brave Answers : HTTP {ex.code} — {detail or ex.reason} "
+                                      "(401/403 : clé invalide ou offre « Answers » non souscrite ; "
+                                      "422 : requête refusée ; 429 : trop de requêtes)")
+                return ""
+            except Exception as ex:
+                self._trace_recherche(f"Brave Answers : échec réseau — {type(ex).__name__}: {ex}")
+                return ""
+            try:
+                contenu = rep["choices"][0]["message"]["content"]
+            except Exception:
+                self._trace_recherche(f"Brave Answers : réponse sans contenu exploitable — {str(rep)[:200]}")
+                return ""
+            t = self._leo_nettoyer(contenu)
+            self._trace_recherche(f"Brave Answers : réponse reçue — {t[:300]!r}")
+            time.sleep(0.6)  # l'API publique est limitée à 2 requêtes par seconde
+            if (not t or re.fullmatch(r"(?i)inconnu\.?", t) or
+                    re.search(r"(?i)\b(je n'ai pas (?:trouvé|pu trouver)|je ne trouve pas|je ne dispose pas|"
+                              r"je ne sais pas|aucune information|pas d'information|informations? (?:non )?disponibles?|"
+                              r"je n'ai aucune)\b", t[:250])):
+                return ""
+            return t
+
+        def _leo_parse_duree(self, t):
+            import re
+            m = re.search(r"(\d+)\s*h(?:eures?)?\s*(\d+)?", t, re.I)
+            if m:
+                v = int(m.group(1)) * 60 + int(m.group(2) or 0)
+            else:
+                m = re.search(r"(\d{2,3})\s*(?:min|mn|minutes)", t, re.I) or re.search(r"\b(\d{2,3})\b", t)
+                v = int(m.group(1)) if m else 0
+            return str(v) if 30 <= v <= 400 else ""
+
+        def _leo_parse_nom_court(self, t, motifs):
+            """Nom(s) propre(s) dans une réponse courte : phrase complète
+            (« … a été réalisé par X et Y. »), nom seul, ou liste."""
+            import re
+            for ligne in [l.strip(" -•*\t") for l in t.splitlines() if l.strip()]:
+                for mo in motifs:
+                    m = re.search(mo, ligne, re.I)
+                    if m:
+                        ligne = m.group(1)
+                        break
+                ligne = re.sub(r"\([^)]*\)", "", ligne).strip(" .:;,-–")
+                ligne = re.sub(r"(?i)^(?:les?|la|l['’]|studios?|soci[ée]t[ée]s?)\s+", "", ligne).strip()
+                if 2 <= len(ligne) <= 90:
+                    return ligne
+            return ""
+
+        def _leo_parse_studio(self, t):
+            """Nom du studio dans une réponse : « … a été créé par le studio
+            Bidibul Productions, avec la participation de … » -> « Bidibul
+            Productions ». Une réponse qui ne parle que du réalisateur est
+            rejetée (jamais de nom de réalisateur dans le champ studio)."""
+            import re
+            fin = r"(?=\s+(?:avec|en collaboration|qui|en partenariat)\b|[.,;(]|$)"
+            motifs = [
+                r"\b[Ss]tudios?\s+(?:d['’]animation\s+)?(?:(?:est|était|nommé|appelé)\s+|:\s*)?"
+                r"(?:les?\s+|la\s+|l['’])?([A-ZÀ-ÝÉ0-9][^.,;()]*?)" + fin,
+                r"\b(?:cr[ée]{1,2}|produit|anim[ée])e?\s+par\s+(?:les?\s+|la\s+|l['’])?(?:[Ss]tudios?\s+)?"
+                r"([A-ZÀ-ÝÉ0-9][^.,;()]*?)" + fin,
+            ]
+            for ligne in [l.strip(" -•*\t") for l in t.splitlines() if l.strip()]:
+                for mo in motifs:
+                    m = re.search(mo, ligne)
+                    if m:
+                        nom = m.group(1).strip(" .:;,-–")
+                        if 2 <= len(nom) <= 70 and not re.search(r"(?i)^r[ée]alis", nom):
+                            return nom
+            if not re.search(r"(?i)r[ée]alis", t):
+                return self._leo_parse_nom_court(t, [])
+            return ""
+
+        def _leo_parse_voix(self, t, avec_roles=True):
+            """Décode une réponse « voix / acteurs » quelle qu'en soit la forme.
+            Formats lus : lignes « Doubleur : Personnage » (ou séparées par
+            – - → —), « Doubleur (Personnage) », phrases « Personnage est
+            doublé par Doubleur ». Renvoie « Doubleur (Personnage) / … ».
+            Sont écartées : voix additionnelles, québécoises, originales."""
+            import re
+            NOM = r"[A-ZÀ-ÝÉ][\w'’.\-]+(?:\s+(?:de|du|d'|van|von|le|la)?\s*[A-ZÀ-ÝÉ][\w'’.\-]+){1,3}"
+            t = re.sub(r"(?i)\b(?:voix\s+additionnelles?|voix\s+qu[ée]b[ée]coises?|voix\s+originales?)\b.*",
+                       "", t, flags=re.S) if re.search(r"(?im)^\W*voix\s+(?:additionnelles?|qu[ée]b|originales?)", t) else t
+            paires = []
+
+            def ajouter(nom, perso):
+                nom = re.sub(r"\([^)]*\)", "", nom).strip(" ,;.:-–—*")
+                perso = re.sub(r"\s+", " ", (perso or "")).strip(" ,;.:-–—*")
+                perso = re.sub(r"(?i)^(?:et|,)\s+", "", perso).strip()
+                perso = re.sub(r"\s*\(([^)]*)\)", r" - \1", perso).strip()  # pas de parenthèses imbriquées
+                if not (4 <= len(nom) <= 40) or re.search(r"\d", nom) or len(nom.split()) < 2:
+                    return
+                if re.search(r"(?i)additionnelle|qu[ée]b[ée]c|voix originales", nom + " " + perso):
+                    return
+                if not avec_roles or len(perso) > 60:
+                    perso = ""
+                e = f"{nom} ({perso})" if perso else nom
+                if e not in paires:
+                    paires.append(e)
+
+            lignes = [l.strip(" \t-•*·") for l in re.split(r"[\n;]+", t) if l.strip(" \t-•*·")]
+            for l in lignes:
+                l = re.sub(r"^\d+[.)]\s*", "", l)
+                if re.search(r"(?i)additionnelle|qu[ée]b[ée]c|originales?\b", l):
+                    continue
+                m = re.match(r"^(.+?)\s*(?::|→|->|—|–|\s-\s|\t+)\s*(.+)$", l)
+                if m:
+                    g, d = m.group(1).strip(), m.group(2).strip()
+                    g_nom = re.fullmatch(NOM, re.sub(r"\([^)]*\)", "", g).strip())
+                    d_nom = re.fullmatch(NOM, re.sub(r"\([^)]*\)", "", d).strip(" ."))
+                    if len(g.split()) == 1 and d_nom:
+                        g, d = d, g  # « Patch : Gwenaël Sommier » : ordre inversé
+                    elif not g_nom and d_nom:
+                        g, d = d, g
+                    for n in re.split(r"\s*(?:,| et |&)\s*", g):
+                        ajouter(n, d)
+                    continue
+                for m in re.finditer(r"(" + NOM + r")\s*\(([^)]+)\)", l):
+                    ajouter(m.group(1), m.group(2))
+            if not paires:
+                # Phrase unique : « Patch est doublé par Gwenaël Sommier, Ouragan par … »
+                for m in re.finditer(r"([^,.;]+?)\s+(?:est|sont)?\s*(?:doubl[ée]e?s?|interpr[ée]t[ée]e?s?)?\s*par\s+(" + NOM + ")", t):
+                    ajouter(m.group(2), re.sub(r"(?i)^(?:le|la|les|l['’])?\s*(?:personnage|r[ôo]le)?\s*(?:de\s+)?", "", m.group(1)).strip())
+                for m in re.finditer(r"(" + NOM + r")\s+(?:double|prête sa voix à|interprète)\s+(?:le personnage de\s+)?([^,.;]+)", t):
+                    ajouter(m.group(1), m.group(2))
+            return " / ".join(paires)
+
+        def _rechercher_leo(self, titre, annee_cible=None):
+            """Léo (Brave Answers) : une question spécifique par champ resté
+            vide. Renvoie un dict (année, résumé, voix / acteurs, durée,
+            studio, réalisateur) ou None. Sans clé : source ignorée."""
+            import re
+            cle = (getattr(self, "_leo_api_key", "") or "").strip()
+            if not cle:
+                self._trace_recherche("Brave Answers : aucune clé Brave configurée (🔑 Clé API Brave (facultatif)), source ignorée")
+                return None
+            cat = getattr(self, "_recherche_categorie_courante", "") or ""
+            anim = (cat == "Films d'animation")
+            theatre = (cat == "Pièce de théâtre")
+            objet = "la pièce de théâtre" if theatre else ("le film d'animation" if anim else "le film")
+            demi = "de la pièce de théâtre" if theatre else ("du film d'animation" if anim else "du film")
+            ref = f"« {titre} »" + (f" de {annee_cible}" if annee_cible else "")
+            fin = " Si tu n'es pas sûr de ce film précis, réponds uniquement : INCONNU."
+            manquants = set(getattr(self, "_recherche_manquants", None) or
+                            ("annee", "resume", "personnes", "realisateur", "duree", "renseignements"))
+            resultat = {}
+
+            if "annee" in manquants and not annee_cible:
+                t = self._leo_poser_question(
+                    f"En quelle année est sorti {objet} {ref} ? Réponds uniquement par l'année." + fin, cle)
+                m = re.search(r"\b(19\d{2}|20\d{2})\b", t)
+                if m:
+                    resultat["annee"] = m.group(1)
+            if "resume" in manquants:
+                t = self._leo_poser_question(
+                    f"Quel est le synopsis {demi} {ref} ? Réponds uniquement par le synopsis, en français, "
+                    "en quelques phrases, sans introduction ni conclusion." + fin, cle)
+                if t:
+                    paras = [l.strip(" -•*") for l in t.splitlines() if l.strip()]
+                    paras = [l for l in paras if not (l.endswith(":") and len(l) < 80)]  # « Voici le synopsis : »
+                    texte = "\n\n".join(paras).strip()
+                    if len(texte) > 40:
+                        resultat["resume"] = texte[:1500]
+            if "personnes" in manquants:
+                if anim:
+                    t = self._leo_poser_question(
+                        f"Quelles sont les voix françaises {demi} {ref} ? Réponds uniquement par une liste, une voix "
+                        "par ligne, au format « Nom du doubleur : Nom du personnage ». Sans les voix additionnelles, "
+                        "sans les voix québécoises, sans les voix originales." + fin, cle)
+                    voix = self._leo_parse_voix(t, avec_roles=True) if t else ""
+                else:
+                    t = self._leo_poser_question(
+                        f"Quels sont les acteurs principaux {demi} {ref} ? Réponds uniquement par une liste, un nom "
+                        "par ligne, sans les rôles." + fin, cle)
+                    voix = self._leo_parse_voix(t, avec_roles=False) if t else ""
+                    if not voix and t:
+                        noms = [re.sub(r"\([^)]*\)", "", l).strip(" -•*.,;") for l in re.split(r"[\n,;]+", t)]
+                        voix = " / ".join(n for n in noms if 4 <= len(n) <= 40 and len(n.split()) >= 2
+                                          and not re.search(r"\d", n))
+                if voix:
+                    resultat["personnes"] = voix
+            if "duree" in manquants and not theatre:
+                t = self._leo_poser_question(
+                    f"Quelle est la durée {demi} {ref} ? Réponds uniquement par la durée en minutes." + fin, cle)
+                d = self._leo_parse_duree(t) if t else ""
+                if d:
+                    resultat["duree"] = d
+            if "renseignements" in manquants and anim:
+                t = self._leo_poser_question(
+                    f"Quel studio d'animation a créé {objet} {ref} ? Réponds uniquement par le nom du studio." + fin, cle)
+                nom = self._leo_parse_studio(t) if t else ""
+                if nom:
+                    resultat["renseignements"] = nom
+            if "realisateur" in manquants:
+                t = self._leo_poser_question(
+                    f"Qui a réalisé {objet} {ref} ? Réponds uniquement par le ou les noms." + fin, cle)
+                nom = self._leo_parse_nom_court(t, [r"r[ée]alis[ée]e?\s+par\s+([^.;]+)",
+                                                    r"r[ée]alisateurs?\s+(?:est|sont|:)\s+([^.;]+)"]) if t else ""
+                if nom:
+                    resultat["realisateur"] = " / ".join(x.strip() for x in re.split(r"\s*(?:,|;|&|\bet\b)\s*", nom) if x.strip())
+
+            if not resultat:
+                return None
+            resultat["source"] = "https://search.brave.com/ask"
+            return resultat
+
+        # ══════════════════════════════════════════════════════════════
+        # 🦁 « Demander » de Brave (Ask Brave) — source n°2 des films
+        # d'animation, en mode SEMI-AUTOMATIQUE : Ask Brave est gratuit mais
+        # sa réponse se charge par JavaScript (illisible pour Citron).
+        # Citron ouvre donc la question dans le navigateur ; l'utilisateur
+        # copie la réponse, puis « Coller la réponse » la décode (une
+        # question par champ vide ; réponse en liste, en plusieurs lignes ou
+        # en une phrase) et remplit le champ correspondant.
+        # ══════════════════════════════════════════════════════════════
+        def _demander_brave_etape(self, titre, annee_cible=None):
+            """Repère de l'étape « Demander à Brave » dans l'arbre de recherche
+            (traitée par _completer_tableur_recherche_etape : ouvre la fenêtre
+            _demander_brave_ouvrir au lieu d'interroger un site)."""
+            return None
+
+        def _demander_brave_questions(self, titre, annee, cat, champs_actuels):
+            """[(champ, nom_du_champ, question)] des champs encore vides."""
+            anim = (cat == "Films d'animation")
+            theatre = (cat == "Pièce de théâtre")
+            objet = "la pièce de théâtre" if theatre else ("le film d'animation" if anim else "le film")
+            demi = "de la pièce de théâtre" if theatre else ("du film d'animation" if anim else "du film")
+            ref = f"{titre}" + (f" ({annee})" if annee else "")
+            q = []
+            if not champs_actuels.get("annee"):
+                q.append(("annee", "Année", f"En quelle année est sorti {objet} {titre} ?"))
+            if not champs_actuels.get("resume"):
+                q.append(("resume", "Résumé / synopsis",
+                          f"Quel est le synopsis {demi} {ref} ?"))
+            if not champs_actuels.get("personnes"):
+                if anim:
+                    q.append(("personnes", "Voix française",
+                              f"Quelles sont les voix françaises {demi} {ref} ?"))
+                else:
+                    q.append(("personnes", "Comédiens" if theatre else "Acteurs",
+                              f"Quels sont les acteurs principaux {demi} {ref} ?"))
+            if not champs_actuels.get("duree") and not theatre:
+                q.append(("duree", "Durée", f"Quelle est la durée {demi} {ref} en minutes ?"))
+            if anim and not champs_actuels.get("renseignements"):
+                q.append(("renseignements", "Renseignements divers (studio)",
+                          f"Quel studio d'animation a créé {objet} {ref} ?"))
+            if not champs_actuels.get("realisateur"):
+                q.append(("realisateur", "Mise en scène" if theatre else "Réalisateur",
+                          f"Qui a réalisé {objet} {ref} ?"))
+            if not champs_actuels.get("affiche"):
+                q.append(("affiche", "Affiche (URL image)",
+                          f"Quelle est l'affiche de {ref} ?"))
+            if not champs_actuels.get("bande_annonce"):
+                q.append(("bande_annonce", "Bande-annonce (URL vidéo)",
+                          f"Quelle est la bande annonce de {ref} ?"))
+            return q
+
+        def _demander_brave_interpreter(self, champ, texte, cat):
+            """Décode la réponse copiée depuis Ask Brave pour UN champ. Renvoie
+            la valeur à inscrire, ou "" si rien d'exploitable."""
+            import re
+            anim = (cat == "Films d'animation")
+            t = self._leo_nettoyer(texte)
+            # Lignes parasites d'une réponse copiée : sources, suggestions, boutons.
+            lignes = [l for l in t.splitlines()
+                      if not re.match(r"(?i)^\W*(sources?|r[ée]f[ée]rences?|questions? (?:li[ée]es|suivantes?)|"
+                                      r"copier|partager|plus|voir plus)\W*$", l.strip())]
+            t = "\n".join(lignes).strip()
+            if not t or re.search(r"(?i)\b(je n'ai pas (?:trouvé|pu trouver)|je ne trouve pas|je ne dispose pas|"
+                                  r"aucune information|pas d'information)\b", t[:250]):
+                return ""
+            if champ in ("affiche", "bande_annonce"):
+                # Liens de la réponse (texte brut ou lien Markdown [texte](url)).
+                liens = []
+                for u in re.findall(r"https?://[^\s<>\"'\)\]]+", texte or ""):
+                    u = u.rstrip(".,;:!»")
+                    if u and u not in liens:
+                        liens.append(u)
+                # Liens d'image « proxy » de Brave : l'adresse d'origine est encodée dedans.
+                liens = [self._brave_decoder_image(u) for u in liens]
+                if champ == "bande_annonce":
+                    for u in liens:
+                        if re.search(r"(?i)(youtube\.com/watch|youtu\.be/|youtube\.com/embed/|"
+                                     r"dailymotion\.com/video|dai\.ly/)", u):
+                            return u
+                    # Vidéo AlloCiné (lisible par yt-dlp) : lecteur, page vidéo ou article.
+                    for u in liens:
+                        if re.search(r"(?i)allocine\.fr/(?:video/(?:player_gen_cmedia=|video-)\d+"
+                                     r"|article/fichearticle_gen_carticle=\d+)", u):
+                            return u
+                    # Seulement une fiche film AlloCiné : on y relève le lien de la bande-annonce.
+                    for u in liens:
+                        if re.search(r"(?i)allocine\.fr/film/fichefilm", u):
+                            ba = self._allocine_ba_depuis_fiche(u)
+                            if ba:
+                                return ba
+                    # Autre page (ex. cine974.com) : on y cherche une vidéo intégrée (YouTube,
+                    # Dailymotion, AlloCiné, ou fichier vidéo direct). Si rien n'est trouvé, c'est
+                    # « _coller » qui prend le relais en cherchant la bande-annonce sur YouTube.
+                    pages = [u for u in liens
+                             if "imgs.search.brave.com" not in u.lower()
+                             and not re.search(r"(?i)\.(?:jpe?g|png|webp|gif)(?:\?|$)", u)
+                             and "allocine.fr/film/fichefilm" not in u.lower()]
+                    for u in pages[:3]:
+                        ba = self._ba_depuis_page(u)
+                        if ba:
+                            return ba
+                    return ""
+                # Affiche : image directe (jpg/jpeg/png, pas webp) en priorité, puis fiche AlloCiné
+                # (Citron sait en tirer l'affiche).
+                for u in liens:
+                    if re.search(r"(?i)\.(?:jpe?g|png)(?:\?|$)", u) and self._format_image_autorise(u):
+                        return u
+                for u in liens:
+                    if re.search(r"(?i)allocine\.fr/film/fichefilm", u):
+                        return u
+                return ""
+            if champ == "annee":
+                m = re.search(r"\b(19\d{2}|20\d{2})\b", t)
+                return m.group(1) if m else ""
+            if champ == "resume":
+                paras = [l.strip(" -•*") for l in t.splitlines() if l.strip()]
+                paras = [l for l in paras if not (l.endswith(":") and len(l) < 80)]
+                texte_r = "\n\n".join(paras).strip()
+                return texte_r[:1500] if len(texte_r) > 40 else ""
+            if champ == "personnes":
+                return self._leo_parse_voix(t, avec_roles=anim) or ""
+            if champ == "duree":
+                return self._leo_parse_duree(t)
+            if champ == "renseignements":
+                return self._leo_parse_studio(t)
+            if champ == "realisateur":
+                nom = self._leo_parse_nom_court(t, [r"r[ée]alis[ée]e?\s+par\s+([^.;]+)",
+                                                    r"r[ée]alisateurs?\s+(?:est|sont|:)\s+([^.;]+)"])
+                return " / ".join(x.strip() for x in re.split(r"\s*(?:,|;|&|\bet\b)\s*", nom) if x.strip())
+            return ""
+
+        def _brave_decoder_image(self, url):
+            """Les images de Brave Search passent par un proxy :
+            https://imgs.search.brave.com/<signature>/rs:fit:860:0:0:0/g:ce/<base64 de l'adresse d'origine>
+            (le base64 est coupé en morceaux par des « / »). Renvoie l'adresse d'origine,
+            ou l'adresse reçue telle quelle si ce n'est pas un lien de ce type."""
+            import re, base64
+            try:
+                if "imgs.search.brave.com/" not in (url or "").lower():
+                    return url
+                segs = url.split("imgs.search.brave.com/", 1)[1].split("?")[0].split("/")
+                idx = [k for k, x in enumerate(segs) if re.match(r"^[a-z]{1,3}:", x)]
+                if not idx:
+                    return url
+                b64 = "".join(segs[idx[-1] + 1:]).split(".")[0]
+                brut = base64.urlsafe_b64decode(b64 + "=" * (-len(b64) % 4)).decode("utf-8", errors="ignore")
+                return brut if brut.lower().startswith("http") else url
+            except Exception:
+                return url
+
+        def _ba_depuis_page(self, url_page):
+            """Lit une page web quelconque et renvoie le lien d'une bande-annonce intégrée :
+            YouTube, Dailymotion, Vimeo, vidéo AlloCiné, ou fichier vidéo direct (.mp4 / .m3u8,
+            lisibles par yt-dlp) ; "" sinon. Le détail (et les indices vidéo repérés quand rien
+            n'est trouvé) est tracé en console."""
+            import re
+            page = (url_page or "").split("#")[0]
+            try:
+                req = urllib.request.Request(page, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                  "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+                    "Accept-Language": "fr-FR,fr;q=0.9"})
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    h = r.read().decode("utf-8", errors="ignore")
+            except Exception as ex:
+                self._trace_recherche(f"Bande-annonce : échec réseau sur {page} — {type(ex).__name__}: {ex}")
+                return ""
+            h = h.replace("\\/", "/").replace("&amp;", "&").replace("\\u0026", "&")
+            lien = ""
+            m = (re.search(r"(?i)youtube(?:-nocookie)?\.com/(?:embed/|watch\?v=)([\w-]{11})", h)
+                 or re.search(r"(?i)youtu\.be/([\w-]{11})", h)
+                 or re.search(r"(?i)[\"']video_?id[\"']\s*[:=]\s*[\"']([\w-]{11})[\"']", h))
+            if m:
+                lien = f"https://www.youtube.com/watch?v={m.group(1)}"
+            if not lien:
+                m = re.search(r"(?i)dailymotion\.com/(?:embed/)?video/([a-z0-9]+)", h) \
+                    or re.search(r"(?i)dai\.ly/([a-z0-9]+)", h)
+                if m:
+                    lien = f"https://www.dailymotion.com/video/{m.group(1)}"
+            if not lien:
+                m = re.search(r"(?i)player\.vimeo\.com/video/(\d+)", h)
+                if m:
+                    lien = f"https://vimeo.com/{m.group(1)}"
+            if not lien:
+                m = re.search(r"(?i)allocine\.fr(/video/(?:player_gen_cmedia=\d+[^\"'\s<>]*?\.html|video-\d+/?))", h)
+                if m:
+                    lien = "https://www.allocine.fr" + m.group(1)
+            if not lien:
+                m = re.search(r"(?i)[\"'(=](https?://[^\"'\s<>)]+?\.(?:mp4|m3u8)(?:\?[^\"'\s<>)]*)?)", h)
+                if m:
+                    lien = m.group(1)
+            if lien:
+                self._trace_recherche(f"Bande-annonce : {lien} (page {page})")
+                return lien
+            indices = []
+            for motif in (r"(?i)<iframe[^>]+src=[\"']([^\"']+)", r"(?i)og:video[^>]+content=[\"']([^\"']+)",
+                          r"(?i)\"(?:embedUrl|contentUrl)\"\s*:\s*\"([^\"]+)"):
+                indices += re.findall(motif, h)[:6]
+            self._trace_recherche(f"Bande-annonce : aucune vidéo repérée (page {page}, {len(h)} octets). "
+                                  f"Indices : {indices[:10] if indices else 'aucun iframe / og:video / embedUrl'}")
+            return ""
+
+        def _allocine_ba_depuis_fiche(self, url_fiche):
+            """Lit une fiche film AlloCiné et renvoie l'adresse de sa bande-annonce
+            (lien « /video/player_gen_cmedia=… » ou « /video/video-… », que yt-dlp
+            sait lire), ou "" si rien n'est trouvé (détail tracé en console)."""
+            import re
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; Citron/1.0; usage personnel)"}
+            m = re.search(r"fichefilm_gen_cfilm=(\d+)", url_fiche)
+            pages = [url_fiche]
+            if m:
+                pages.append(f"https://www.allocine.fr/video/fichefilm_gen_cfilm={m.group(1)}.html")
+            motif = re.compile(r"""(?:https?://(?:www\.)?allocine\.fr)?(/video/(?:player_gen_cmedia=\d+[^"'\s<>]*?\.html|video-\d+/?))""")
+            for page in pages:
+                try:
+                    req = urllib.request.Request(page, headers=headers)
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        html_page = r.read().decode("utf-8", errors="ignore")
+                except Exception as ex:
+                    self._trace_recherche(f"AlloCiné (bande-annonce) : échec réseau sur {page} — {type(ex).__name__}: {ex}")
+                    continue
+                trouve = motif.search(html_page.replace("&amp;", "&"))
+                if trouve:
+                    lien = "https://www.allocine.fr" + trouve.group(1)
+                    self._trace_recherche(f"AlloCiné (bande-annonce) : {lien} relevé sur {page}")
+                    return lien
+                self._trace_recherche(f"AlloCiné (bande-annonce) : aucun lien vidéo sur {page}")
+            return ""
+
+        def _demander_brave_ouvrir(self, win, champs_actuels, cat):
+            """Fenêtre « 🦁 Demander à Brave » : une ligne par champ vide avec
+            « Poser la question » (ouvre Ask Brave dans le navigateur, question
+            aussi copiée dans le presse-papiers) et « Coller la réponse »
+            (lit le presse-papiers, décode, remplit le champ s'il est vide)."""
+            titre = (champs_actuels.get("titre") or "").strip()
+            annee = (champs_actuels.get("annee") or "").strip()
+            if not titre:
+                win.status_label.configure(text="⚠️ Indique d'abord le titre.", text_color="#ff8888")
+                return
+            questions = self._demander_brave_questions(titre, annee, cat, champs_actuels)
+            if not questions:
+                win.status_label.configure(
+                    text="ℹ️ Aucun champ vide à demander à Brave.", text_color="#cccccc")
+                return
+            try:
+                ancienne = getattr(win, "_brave_dlg", None)
+                if ancienne is not None and ancienne.winfo_exists():
+                    ancienne.destroy()
+            except Exception:
+                pass
+            dlg = ctk.CTkToplevel(win)
+            win._brave_dlg = dlg
+            dlg.title("🦁 Demander à Brave")
+            dlg.geometry("680x%d" % min(120 + 92 * len(questions) + 60, 760))
+            dlg.minsize(600, 300)
+            try:
+                dlg.transient(win)
+            except Exception:
+                pass
+            ctk.CTkLabel(
+                dlg, justify="left", anchor="w", wraplength=640, font=("Arial", 12), text_color="#cccccc",
+                text="Pour chaque champ vide : 1) « Poser la question » ouvre Ask Brave dans ton navigateur "
+                     "(la question est aussi copiée : colle-la dans la zone si elle n'apparaît pas) ; "
+                     "2) attends la réponse, puis copie-la (bouton « Copier » de Brave, ou sélection + Ctrl+C) ; "
+                     "3) « Coller la réponse » : Citron la décode et remplit le champ."
+            ).pack(fill="x", padx=16, pady=(12, 6))
+            zone = ctk.CTkScrollableFrame(dlg, fg_color="#242424")
+            zone.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+
+            def _coller(champ, nom_champ, question, lbl_statut):
+                try:
+                    texte = dlg.clipboard_get()
+                except Exception:
+                    texte = ""
+                texte = (texte or "").strip()
+                if not texte or texte == question.strip():
+                    lbl_statut.configure(
+                        text="⚠️ Le presse-papiers est vide ou contient encore la question : copie d'abord la réponse de Brave.",
+                        text_color="#ff9999")
+                    return
+                avant = self._completer_tableur_lire_champs(win)
+                if avant.get(champ):
+                    lbl_statut.configure(text="ℹ️ Ce champ est déjà rempli : efface-le pour le remplacer.",
+                                         text_color="#cccccc")
+                    return
+                valeur = self._demander_brave_interpreter(champ, texte, cat)
+                self._trace_recherche(f"Demander à Brave : champ « {nom_champ} », réponse collée "
+                                      f"{texte[:300]!r} → {valeur[:200]!r}")
+                if not valeur and champ == "bande_annonce" and avant.get("titre"):
+                    # Pas de vidéo exploitable dans la réponse de Brave : recherche habituelle de
+                    # Citron (YouTube puis Dailymotion) à partir du titre et de l'année du formulaire.
+                    libelle = ("de la pièce de théâtre" if cat == "Pièce de théâtre"
+                               else "du film d'animation" if cat == "Films d'animation" else "du film")
+                    lbl_statut.configure(text="🔎 Pas de vidéo dans la réponse : recherche sur YouTube…",
+                                         text_color="#cccccc")
+                    lbl_statut.update_idletasks()
+                    res_ba = {}
+                    self._rechercher_bande_annonce_dans_resultat(
+                        res_ba, avant["titre"], avant.get("annee") or None, libelle)
+                    valeur = res_ba.get("bande_annonce") or ""
+                    self._trace_recherche(f"Demander à Brave : repli recherche bande-annonce → {valeur!r}")
+                if not valeur:
+                    lbl_statut.configure(
+                        text="❌ Réponse non reconnue pour ce champ (voir la console pour le détail).",
+                        text_color="#ff9999")
+                    return
+                srcs = self._sources_pour_categorie(cat)
+                suite = (f"Prochain clic : {srcs[getattr(win, '_recherche_etape', 0) % len(srcs)][0]}."
+                         if srcs else "")
+                self._completer_tableur_on_resultat(
+                    win, avant, {champ: valeur, "source": "Demander à Brave (Ask Brave)"}, None,
+                    info_etape=suite)
+                lbl_statut.configure(text="✅ Champ rempli : " + (valeur[:80] + ("…" if len(valeur) > 80 else "")),
+                                     text_color="#88cc88")
+
+            def _poser(question, lbl_statut):
+                try:
+                    dlg.clipboard_clear()
+                    dlg.clipboard_append(question)
+                except Exception:
+                    pass
+                webbrowser.open("https://search.brave.com/ask?q=" + urllib.parse.quote(question))
+                lbl_statut.configure(text="🌐 Question ouverte dans le navigateur (et copiée).",
+                                     text_color="#cccccc")
+
+            for champ, nom_champ, question in questions:
+                cadre = ctk.CTkFrame(zone, fg_color="#333333")
+                cadre.pack(fill="x", pady=4, padx=2)
+                ctk.CTkLabel(cadre, text=nom_champ, font=("Arial", 13, "bold"), anchor="w").pack(
+                    fill="x", padx=10, pady=(8, 0))
+                ctk.CTkLabel(cadre, text=question, font=("Arial", 11), text_color="#aaaaaa", anchor="w",
+                             justify="left", wraplength=620).pack(fill="x", padx=10)
+                ligne = ctk.CTkFrame(cadre, fg_color="transparent")
+                ligne.pack(fill="x", padx=10, pady=(4, 2))
+                lbl = ctk.CTkLabel(cadre, text="", font=("Arial", 11), anchor="w", justify="left", wraplength=620)
+                ctk.CTkButton(ligne, text="🌐 Poser la question", width=170, height=28,
+                              command=lambda q=question, l=lbl: _poser(q, l)).pack(side="left", padx=(0, 8))
+                ctk.CTkButton(ligne, text="📋 Coller la réponse", width=170, height=28,
+                              command=lambda c=champ, n=nom_champ, q=question, l=lbl: _coller(c, n, q, l)
+                              ).pack(side="left")
+                lbl.pack(fill="x", padx=10, pady=(0, 8))
+            ctk.CTkButton(dlg, text="Fermer", width=110, fg_color="#5a5a5a", command=dlg.destroy).pack(pady=(0, 12))
+
         def _rechercher_bande_annonce_youtube(self, titre, annee=None, libelle="du film"):
             """Recherche best-effort une bande-annonce sur YouTube, en lisant
             la page de résultats publique (pas d'API/clé nécessaire, mais
@@ -12951,6 +14077,45 @@ try:
             entry.select_range(0, "end")
             dlg.grab_set()
 
+        def _completer_tableur_config_leo(self, win):
+            """Saisie de la clé API Brave Search (offre « Answers »), utilisée
+            par la source « Brave Answers (API) ». Sans clé, la source est ignorée."""
+            parent = win or self
+            dlg = ctk.CTkToplevel(parent)
+            dlg.title("🔑 Clé API Brave (facultatif)")
+            dlg.resizable(False, False)
+            dlg.transient(parent)
+
+            ctk.CTkLabel(dlg, text="Clé API Brave Search (offre « Answers »)", font=("Arial", 13, "bold")
+                         ).pack(padx=20, pady=(18, 2), anchor="w")
+            ctk.CTkLabel(dlg, text="À créer sur api-dashboard.search.brave.com (abonnement « Answers » ;\n"
+                                   "service facturé à l'usage par Brave, avec un crédit mensuel : voir leurs tarifs).",
+                         font=("Arial", 11), text_color="#999999", justify="left").pack(padx=20, anchor="w")
+
+            var = ctk.StringVar(value=getattr(self, "_leo_api_key", "") or "")
+            entry = ctk.CTkEntry(dlg, textvariable=var, width=380, height=36)
+            entry.pack(padx=20, pady=(10, 14))
+            self._menu_contextuel_champ(entry)
+
+            def _save(event=None):
+                self._leo_api_key = var.get().strip()
+                self.save_settings()
+                dlg.destroy()
+
+            btns = ctk.CTkFrame(dlg, fg_color="transparent")
+            btns.pack(pady=(0, 18))
+            ctk.CTkButton(btns, text="Enregistrer", width=110, command=_save).pack(side="left", padx=8)
+            ctk.CTkButton(btns, text="Annuler", width=110, fg_color="#5a5a5a",
+                          command=dlg.destroy).pack(side="left", padx=8)
+            entry.bind("<Return>", _save)
+            entry.bind("<Escape>", lambda e: dlg.destroy())
+
+            dlg.update_idletasks()
+            dlg.geometry(f"{dlg.winfo_reqwidth()}x{dlg.winfo_reqheight()}")
+            entry.focus_set()
+            entry.select_range(0, "end")
+            dlg.grab_set()
+
         def _completer_tableur_config_ia(self, win):
             """Petite boîte de dialogue pour configurer une IA (compatible
             API « chat completions » : OpenAI, Mistral, Groq, un serveur
@@ -13030,6 +14195,10 @@ try:
                 "personnes": win.field_personnes, "bande_annonce": win.field_bande_annonce,
                 "affiche": win.field_affiche,
             }
+            if hasattr(win, "field_renseignements"):
+                # Rempli seulement par les sources qui le fournissent (Wiki Doublage :
+                # studio d'animation) et seulement si le champ était vide.
+                champ_widget["renseignements"] = win.field_renseignements
             completes = []
             for cle, widget in champ_widget.items():
                 if not champs_avant.get(cle) and (resultat.get(cle) or "").strip():
@@ -17771,6 +18940,61 @@ try:
                 pw.after(120, _poll_pointer)
             pw.after(120, _poll_pointer)
 
+        def _edge_tts_mettre_a_jour(self):
+            """Met à jour edge-tts (pip install --upgrade) une seule fois par session.
+            Utilisé quand le service vocal de Microsoft répond « 403 » : il a changé son
+            protocole d'authentification, et seules les versions récentes d'edge-tts le
+            gèrent. Renvoie True si la mise à jour s'est bien exécutée."""
+            import sys, subprocess, threading, importlib
+            lock = self.__dict__.setdefault("_edge_maj_lock", threading.Lock())
+            with lock:
+                if getattr(self, "_edge_maj_faite", False):
+                    return getattr(self, "_edge_maj_ok", False)
+                self._edge_maj_faite = True
+                self._edge_maj_ok = False
+                print("[Résumé] Le service vocal répond 403 : mise à jour automatique d'edge-tts…")
+                try:
+                    kw = {}
+                    if sys.platform == "win32":
+                        kw["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+                    r = subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "edge-tts"],
+                                       capture_output=True, text=True, timeout=240, **kw)
+                    if r.returncode == 0:
+                        for nom in [n for n in list(sys.modules) if n == "edge_tts" or n.startswith("edge_tts.")]:
+                            sys.modules.pop(nom, None)
+                        importlib.invalidate_caches()
+                        self._edge_maj_ok = True
+                        self._edge_tts_available_cache = True
+                        print("[Résumé] edge-tts mis à jour.")
+                    else:
+                        print("[Résumé] Mise à jour d'edge-tts impossible :\n" + (r.stderr or r.stdout or "")[-600:])
+                        print("[Résumé] À faire à la main dans une invite de commandes : "
+                              "pip install --upgrade edge-tts")
+                except Exception as ex:
+                    print(f"[Résumé] Mise à jour d'edge-tts impossible ({type(ex).__name__}: {ex}). "
+                          "À faire à la main : pip install --upgrade edge-tts")
+                return self._edge_maj_ok
+
+        def _edge_tts_sauver(self, texte, voix, chemin):
+            """Synthétise `texte` avec la voix edge-tts `voix` dans le fichier `chemin`.
+            Si le service répond 403, met edge-tts à jour (une fois) puis réessaie."""
+            import asyncio
+
+            def _essai():
+                import edge_tts
+
+                async def _s():
+                    await edge_tts.Communicate(texte, voix).save(chemin)
+                asyncio.run(_s())
+
+            try:
+                _essai()
+            except Exception as ex:
+                if "403" in str(ex) and self._edge_tts_mettre_a_jour():
+                    _essai()
+                else:
+                    raise
+
         def _get_edge_tts_available(self):
             """Vérifie une seule fois (résultat mis en cache) si edge-tts est
             disponible (module Python installé) : voix neuronale bien plus
@@ -17951,12 +19175,8 @@ try:
 
             def _synth_one(idx):
                 try:
-                    import edge_tts, asyncio
                     path = _mp3_path(idx)
-                    async def _s():
-                        communicate = edge_tts.Communicate(chunks[idx], voice)
-                        await communicate.save(path)
-                    asyncio.run(_s())
+                    self._edge_tts_sauver(chunks[idx], voice, path)
                     if os.path.isfile(path):
                         entry["paths"][idx] = path
                         entry["ok"][idx] = True
@@ -18044,15 +19264,11 @@ try:
             paths = [_mp3_path(i) for i in range(len(chunks))]
 
             try:
-                import edge_tts
-                import asyncio
-
-                async def _synth(txt, path):
-                    communicate = edge_tts.Communicate(txt, voice)
-                    await communicate.save(path)
+                def _synth(txt, path):
+                    self._edge_tts_sauver(txt, voice, path)
 
                 # Synthèse (courte, donc rapide) du premier segment.
-                asyncio.run(_synth(chunks[0], paths[0]))
+                _synth(chunks[0], paths[0])
                 if stop_event.is_set():
                     return
                 if not os.path.isfile(paths[0]):
@@ -18067,7 +19283,7 @@ try:
 
                 def _synth_rest():
                     try:
-                        asyncio.run(_synth(chunks[1], paths[1]))
+                        _synth(chunks[1], paths[1])
                         rest_ok["ok"] = os.path.isfile(paths[1])
                     except Exception as ex:
                         print(f"[Résumé] Erreur edge-tts (suite) : {ex}")
