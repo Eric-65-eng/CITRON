@@ -1,6 +1,6 @@
 {
-    "version":  "9.8",
-    "url":  "https://raw.githubusercontent.com/TonCompte/citron/main/Citron.py",
-    "notes":  "Amméllioration de recherches dans compléter le tableur",
-    "sha256":  "3375bcfcd20e06490f3d24c957259cd8284de8479e4afadd74ead63af82fab6d"
+    "version":  "9.8.1",
+    "url":  "https://github.com/",
+    "notes":  "Amméllioration de la recherche plus divers.",
+    "sha256":  "da5024256a5919c4cdab3530d474cc9e1175fab371ab5272f9d4d71a8fd684f3"
 }

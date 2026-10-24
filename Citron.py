@@ -470,7 +470,7 @@ set_process_dpi_aware()
 # Exemple : CITRON_VERSION = "9.8"
 # (penser à mettre le même numéro dans citron_update.json sur GitHub)
 # ══════════════════════════════════════════════════════════════════
-CITRON_VERSION = "9.8"
+CITRON_VERSION = "9.8.1"
 
 log_file = "erreur_citron.log"
 with open(log_file, "w", encoding="utf-8") as f:
