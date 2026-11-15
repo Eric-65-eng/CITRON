@@ -1,3 +1,12 @@
+# ══════════════════════════════════════════════════════════════════
+# 🍋 VERSION DE CITRON — SEUL ENDROIT À MODIFIER
+# Ce numéro est repris automatiquement partout : titre de la fenêtre,
+# bandeau en haut de l'écran, journal de démarrage, mode d'emploi,
+# vérification de mise à jour et User-Agent des requêtes internet.
+# (penser à mettre le même numéro dans citron_update.json sur GitHub)
+# ══════════════════════════════════════════════════════════════════
+CITRON_VERSION = "9.8.2"
+
 import os
 import json
 import traceback
@@ -22,6 +31,56 @@ import ssl
 from tkinter import filedialog, Listbox, END, Scrollbar, messagebox, Menu, Canvas
 from datetime import datetime
 from collections import Counter
+
+# ══════════════════════════════════════════════════════════════════
+# ── 🛟 Journal de plantage : citron_crash.log ───────────────────────
+# ══════════════════════════════════════════════════════════════════
+# Quand Citron se ferme brutalement SANS message d'erreur (plantage natif
+# de VLC, de Tk…), la console ne montre rien. Ce journal, écrit à côté de
+# Citron.py, garde alors la trace Python de tous les threads au moment du
+# plantage, ainsi que les erreurs de callbacks Tk et de threads qui, sinon,
+# passent inaperçues. À envoyer si Citron se referme tout seul.
+try:
+    import faulthandler as _faulthandler
+    _crash_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "citron_crash.log")
+    try:
+        if os.path.isfile(_crash_path) and os.path.getsize(_crash_path) > 400_000:
+            os.remove(_crash_path)           # évite un fichier qui grossit sans fin
+    except Exception:
+        pass
+    _crash_fh = open(_crash_path, "a", encoding="utf-8", buffering=1)
+    _crash_fh.write(f"\n===== Démarrage Citron v{CITRON_VERSION} — "
+                    f"{time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
+    _faulthandler.enable(file=_crash_fh, all_threads=True)
+
+    def _crash_log_exc(origine, exc_type, exc, tb):
+        try:
+            _crash_fh.write(f"\n[{time.strftime('%H:%M:%S')}] Exception ({origine}) :\n")
+            traceback.print_exception(exc_type, exc, tb, file=_crash_fh)
+        except Exception:
+            pass
+
+    _sys_hook_orig = sys.excepthook
+    def _sys_hook(exc_type, exc, tb):
+        _crash_log_exc("principal", exc_type, exc, tb)
+        _sys_hook_orig(exc_type, exc, tb)
+    sys.excepthook = _sys_hook
+
+    _thr_hook_orig = threading.excepthook
+    def _thr_hook(args):
+        _crash_log_exc(f"thread {getattr(args.thread, 'name', '?')}",
+                       args.exc_type, args.exc_value, args.exc_traceback)
+        _thr_hook_orig(args)
+    threading.excepthook = _thr_hook
+
+    import tkinter as _tk_log
+    _tk_cb_orig = _tk_log.Tk.report_callback_exception
+    def _tk_cb(self, exc_type, exc, tb):
+        _crash_log_exc("callback Tk", exc_type, exc, tb)
+        _tk_cb_orig(self, exc_type, exc, tb)
+    _tk_log.Tk.report_callback_exception = _tk_cb
+except Exception as _ex_crash:
+    print(f"[Crash] Journal de plantage indisponible : {_ex_crash}")
 
 # ══════════════════════════════════════════════════════════════════
 # ── 🔒 Certificats HTTPS (toutes les requêtes urllib.request) ───────
@@ -462,16 +521,6 @@ def force_redraw_region(x, y, w, h):
 # ── DPI awareness : à déclarer AVANT toute création de fenêtre Tk ───
 set_process_dpi_aware()
 
-# ══════════════════════════════════════════════════════════════════
-# 🍋 VERSION DE CITRON — SEUL ENDROIT À MODIFIER
-# Ce numéro est repris automatiquement partout : titre de la fenêtre,
-# bandeau en haut de l'écran, journal de démarrage, mode d'emploi,
-# vérification de mise à jour et User-Agent des requêtes internet.
-# Exemple : CITRON_VERSION = "9.8"
-# (penser à mettre le même numéro dans citron_update.json sur GitHub)
-# ══════════════════════════════════════════════════════════════════
-CITRON_VERSION = "9.8.1"
-
 log_file = "erreur_citron.log"
 with open(log_file, "w", encoding="utf-8") as f:
     f.write(f"=== Démarrage Citron v{CITRON_VERSION} - {datetime.now()} ===\n\n")
@@ -528,6 +577,12 @@ print("[BUILD] « Demander à Brave » : deux questions ajoutées, « Quelle est
       "« Affiche » / « Bande-annonce » (2026-10-23)")
 print("[BUILD] « Demander à Brave » : bande-annonce — si la page collée ne contient aucune vidéo, repli sur la recherche YouTube / Dailymotion de Citron ; lecture de page élargie (Vimeo, .mp4/.m3u8) + indices en console (2026-10-24)")
 print("[BUILD] Voix du résumé : erreur 403 du service vocal Microsoft -> edge-tts mis à jour automatiquement (pip) puis nouvel essai, au lieu de retomber sur la voix Windows (2026-10-24)")
+print("[BUILD] Compléter le tableur : affiche et bande-annonce enregistrées sous le nom « Titre (année) » (au lieu de Titre_année_bande_annonce) (2026-10-24)")
+print("[BUILD] Infos (tableur) / Simuler Infos : la bande-annonce ne peut plus démarrer seule (pause explicite au lieu du basculement VLC, initialisation une seule fois, garde de sécurité) (2026-10-24)")
+print("[BUILD] Stabilité : journal de plantage citron_crash.log (trace des fermetures brutales et des erreurs silencieuses) + fermeture plus sûre du lecteur vidéo des fiches (2026-10-24)")
+print("[BUILD] Téléchargement hors YouTube (ex. CrowdBunker) : erreur 403 expliquée avec le vrai nom du site, plus de 6 essais « clients YouTube » inutiles, essais de secours (en-têtes navigateur, imitation de Chrome) (2026-10-25)")
+print("[BUILD] Téléchargement : « Unsupported URL » = erreur définitive avec message clair (pas d'essais de secours inutiles) ; CrowdBunker /rush/ réécrit en /v/ (2026-10-25)")
+print("[BUILD] Compléter le tableur : catégorie « Clip vidéo » — identification de la musique (Shazam, plusieurs passages), groupe / chanteur / album / jaquette / photo / version remastérisée, sources Deezer + Apple Music + MusicBrainz, questions Brave dédiées (2026-10-31)")
 print("[BUILD] « Demander à Brave » : lien d'image proxy de Brave décodé (affiche), page collée analysée pour y trouver la bande-annonce (YouTube / Dailymotion / AlloCiné) (2026-10-24)")
 print("[BUILD] « Demander à Brave » : bande-annonce AlloCiné acceptée (lien vidéo, ou lien relevé sur la fiche film) (2026-10-23)")
 print("[BUILD] AlloCiné : zone de recherche du site lue en premier, fiche choisie à l'année demandée ±1 an "
@@ -1454,6 +1509,9 @@ try:
             self._ia_model = "gpt-4o-mini"
             self._dernier_dossier_affiches = ""
             self._dernier_dossier_bandes_annonces = ""
+            # « Compléter le tableur » : chemins mémorisés PAR CASE À COCHER
+            # (catégorie) -> {"tableur": ..., "affiche": ..., "bande_annonce": ...}
+            self._chemins_par_categorie = {}
 
             self.load_settings()
             self.load_library()
@@ -1616,6 +1674,8 @@ try:
                 self._ia_model = d.get("ia_model", "gpt-4o-mini")
                 self._dernier_dossier_affiches = d.get("dernier_dossier_affiches", "")
                 self._dernier_dossier_bandes_annonces = d.get("dernier_dossier_bandes_annonces", "")
+                _cpc = d.get("chemins_par_categorie", {})
+                self._chemins_par_categorie = _cpc if isinstance(_cpc, dict) else {}
                 self._shotcut_path = d.get("shotcut_path", None)
                 last_dl = d.get("last_download_dir", "") or ""
                 if last_dl:
@@ -1654,6 +1714,7 @@ try:
                      "ia_model": getattr(self, "_ia_model", "gpt-4o-mini"),
                      "dernier_dossier_affiches": getattr(self, "_dernier_dossier_affiches", ""),
                      "dernier_dossier_bandes_annonces": getattr(self, "_dernier_dossier_bandes_annonces", ""),
+                     "chemins_par_categorie": getattr(self, "_chemins_par_categorie", {}),
                      "shotcut_path":self._shotcut_path,
                      "last_download_dir": last_dl,
                      "test_citron_last_folder": getattr(self, "_test_citron_last_folder", None),
@@ -3849,10 +3910,106 @@ try:
             if "sign in to confirm" in low or "not a bot" in low:
                 return ("YouTube demande de « confirmer que vous n'êtes pas un robot ». "
                         "Mettez à jour yt-dlp : pip install -U yt-dlp", False)
+            if "unsupported url" in low:
+                import re
+                m_u = re.search(r"unsupported url:\s*(\S+)", str(err or ""), re.I)
+                adr = m_u.group(1) if m_u else ""
+                if "crowdbunker.com/rush/" in adr.lower():
+                    return ("Lien CrowdBunker « /rush/ » : non pris en charge par yt-dlp "
+                            "(seules les adresses …/v/… et …/@chaîne le sont). "
+                            "Ouvrez la vidéo complète et copiez son adresse /v/….", True)
+                return ("Adresse non prise en charge par yt-dlp"
+                        + (f" ({urllib.parse.urlparse(adr).netloc})" if adr else "")
+                        + ". Vérifiez que c'est bien le lien de la vidéo elle-même, "
+                        "ou mettez à jour : pip install -U yt-dlp", True)
             if "http error 403" in low or "403: forbidden" in low:
-                return ("YouTube a refusé l'accès (403). "
-                        "Mettez à jour yt-dlp : pip install -U yt-dlp", False)
+                site = self._ydl_site_depuis_erreur(err)
+                if site.lower() in ("youtube", "youtube:tab", "youtube:web", ""):
+                    return ("YouTube a refusé l'accès (403). "
+                            "Mettez à jour yt-dlp : pip install -U yt-dlp", False)
+                return (f"{site} a refusé l'accès (403) : le site bloque les téléchargements "
+                        "automatiques (protection anti-robot) ou la vidéo n'est plus accessible "
+                        "(vérifiez-la dans un navigateur). Si elle y est lisible : "
+                        "pip install -U \"yt-dlp[default,curl-cffi]\" puis relancez Citron.", False)
             return (str(err or "erreur inconnue").replace("ERROR: ", "")[:200], False)
+
+        @staticmethod
+        def _ydl_site_depuis_erreur(err):
+            """Nom du site cité par yt-dlp dans « ERROR: [CrowdBunker] … » ("" si absent)."""
+            import re
+            m = re.search(r"\[([^\]]+)\]", str(err or ""))
+            return m.group(1).strip() if m else ""
+
+        @staticmethod
+        def _ydl_normaliser_url(url):
+            """Réécrit certaines adresses vers la forme que yt-dlp sait lire.
+            CrowdBunker : …/rush/<id> -> …/v/<id> (essai au mieux : le lien /rush/
+            n'est pas géré tel quel, la forme /v/ l'est)."""
+            import re
+            m = re.match(r"(https?://(?:www\.)?crowdbunker\.com)/rush/([^/?#&]+)", str(url or ""), re.I)
+            if m:
+                nouveau = f"{m.group(1)}/v/{m.group(2)}"
+                print(f"[Internet] Lien CrowdBunker /rush/ : essai avec la forme {nouveau}")
+                return nouveau
+            return url
+
+        @staticmethod
+        def _url_est_youtube(url):
+            u = str(url or "").lower()
+            return any(h in u for h in ("youtube.com", "youtu.be", "youtube-nocookie.com"))
+
+        def _ydl_variantes_secours(self, url):
+            """Variantes à essayer quand un site (hors YouTube) répond 403 : en-têtes de
+            navigateur complets (Referer/Origin) puis imitation de Chrome (nécessite
+            curl_cffi, installé par « pip install yt-dlp[curl-cffi] »)."""
+            from urllib.parse import urlparse
+            pu = urlparse(str(url))
+            origine = f"{pu.scheme}://{pu.netloc}"
+            variantes = [("en-têtes navigateur", {"http_headers": {
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                               "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"),
+                "Referer": origine + "/", "Origin": origine,
+                "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"}})]
+            try:
+                from yt_dlp.networking.impersonate import ImpersonateTarget
+                variantes.append(("imitation de Chrome", {"impersonate": ImpersonateTarget("chrome")}))
+            except Exception:
+                pass
+            return variantes
+
+        @staticmethod
+        def _ydl_fusionner_opts(base, sup):
+            o = dict(base)
+            for k, v in (sup or {}).items():
+                if k == "http_headers":
+                    o["http_headers"] = {**o.get("http_headers", {}), **v}
+                else:
+                    o[k] = v
+            return o
+
+        def _ydl_extract_avec_secours(self, url, ydl_opts, download=False):
+            """extract_info avec, pour les sites hors YouTube qui répondent 403, les
+            variantes de secours ci-dessus. Lève la dernière erreur si tout échoue."""
+            import yt_dlp
+            url = self._ydl_normaliser_url(url)
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    return ydl.extract_info(url, download=download)
+            except Exception as ex:
+                low = str(ex).lower()
+                if self._url_est_youtube(url) or not ("403" in low and "forbidden" in low):
+                    raise
+                derniere = ex
+                for nom, sup in self._ydl_variantes_secours(url):
+                    try:
+                        with yt_dlp.YoutubeDL(self._ydl_fusionner_opts(ydl_opts, sup)) as ydl:
+                            info = ydl.extract_info(url, download=download)
+                        print(f"[Internet] Réussi avec : {nom}")
+                        return info
+                    except Exception as ex2:
+                        derniere = ex2
+                        print(f"[Internet] Secours « {nom} » : {str(ex2)[:140]}")
+                raise derniere
 
         def _ydl_base_opts(self, extra=None):
             """Options yt-dlp communes, avec plusieurs parades aux erreurs
@@ -4009,8 +4166,8 @@ try:
                         "format": "best[height<=1080][acodec!=none][vcodec!=none]"
                                   "/best[acodec!=none][vcodec!=none]/best",
                     })
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        info = ydl.extract_info(url, download=False)
+                    if True:
+                        info = self._ydl_extract_avec_secours(url, ydl_opts, download=False)
                         if info:
                             title = info.get("title") or title
                             ext = info.get("ext") or ext
@@ -4185,8 +4342,8 @@ try:
                         "format": "best[height<=1080][acodec!=none][vcodec!=none]"
                                   "/best[acodec!=none][vcodec!=none]/best",
                     })
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        info = ydl.extract_info(url, download=False)
+                    if True:
+                        info = self._ydl_extract_avec_secours(url, ydl_opts, download=False)
                         if info:
                             title = info.get("title") or title
                             if info.get("url"):
@@ -5294,24 +5451,36 @@ try:
                         # YouTube, puis (si « pas un robot ») les cookies du navigateur.
                         # On s'arrête dès qu'une erreur est DÉFINITIVE (direct terminé
                         # non encore publié, vidéo privée/supprimée, etc.).
-                        tentatives = [
-                            ("standard", None, None),
-                            ("android", ["android"], None),
-                            ("default", ["default"], None),
-                            ("web_safari", ["web_safari"], None),
-                            ("mweb", ["mweb"], None),
-                            ("tv", ["tv"], None),
-                        ]
+                        url_eff = self._ydl_normaliser_url(url)
+                        if self._url_est_youtube(url):
+                            tentatives = [
+                                ("standard", None, None),
+                                ("android", ["android"], None),
+                                ("default", ["default"], None),
+                                ("web_safari", ["web_safari"], None),
+                                ("mweb", ["mweb"], None),
+                                ("tv", ["tv"], None),
+                            ]
+                        else:
+                            # Autre site : les « clients YouTube » n'ont aucun sens ;
+                            # on essaie d'abord tel quel, puis avec les variantes de
+                            # secours (en-têtes navigateur, imitation de Chrome).
+                            tentatives = [("standard", None, None)] + [
+                                (nom_v, None, sup_v) for nom_v, sup_v in self._ydl_variantes_secours(url)]
                         derniere_ex = None
                         for nom_t, clients, cookies in tentatives:
                             try:
                                 ydl_opts = self._ydl_base_opts(base_opts)
                                 if clients:
                                     ydl_opts["extractor_args"] = {"youtube": {"player_client": clients}}
+                                if cookies:      # (3e élément : options de secours)
+                                    ydl_opts = self._ydl_fusionner_opts(ydl_opts, cookies)
                                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                                    info = ydl.extract_info(url, download=True)
+                                    info = ydl.extract_info(url_eff, download=True)
                                     dest = ydl.prepare_filename(info) if info else None
                                 derniere_ex = None
+                                if nom_t != "standard":
+                                    print(f"[Mémoire] Réussi avec : {nom_t}")
                                 break
                             except Exception as ex_t:
                                 derniere_ex = ex_t
@@ -5330,7 +5499,7 @@ try:
                                         ydl_opts = self._ydl_base_opts(base_opts)
                                         ydl_opts["cookiesfrombrowser"] = (nav,)
                                         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                                            info = ydl.extract_info(url, download=True)
+                                            info = ydl.extract_info(url_eff, download=True)
                                             dest = ydl.prepare_filename(info) if info else None
                                         derniere_ex = None
                                         print(f"[Mémoire] Réussi avec les cookies de {nav}")
@@ -9522,6 +9691,32 @@ try:
 "fenêtre à tout moment. Ensuite : TMDB, AlloCiné, tv-programme.com, \n"
 "SensCritique, Plansamericains et l'IA. Pensez à indiquer l'année : sans elle, Citron \n"
 "prend la première fiche trouvée.\n"
+"   – Catégorie « Clip vidéo » : « Titre » devient « Titre de la chanson »,  \n"
+"« Personnes » (4ème colonne) devient « Chanteur et membres du groupe » (séparés par « / », \n"
+"comme des acteurs), « Réalisateur » devient « Groupe » (vide pour un artiste solo), \n"
+"« Type » devient « Album », « Résumé / synopsis » devient « Anecdote(s) » (histoire de la \n"
+"chanson ou du clip) et « Renseignements divers » indique reprise, duo, etc. ; l'affiche est la \n"
+"jaquette de l'album, la bande-annonce est le clip. Un bloc supplémentaire  \n"
+"apparaît : choisissez le fichier du clip ou de la bande son (« 📂 Fichier… »),  \n"
+"ou collez son lien (YouTube…), puis « 🎵 Identifier la musique » : Citron écoute  \n"
+"jusqu'à 6 passages (le milieu du morceau d'abord, car le début d'un clip est  \n"
+"souvent un court-métrage sans la musique du disque) et interroge Shazam  \n"
+"(paquet « shazamio », installé automatiquement au premier usage). Il remplit  \n"
+"titre, groupe ou chanteur, album, année et jaquette. « Rechercher » complète le  \n"
+"reste, dans cet ordre : Deezer (album, jaquette, photo de l'artiste, durée),  \n"
+"Apple Music / iTunes, MusicBrainz (année de première sortie, jaquette via Cover  \n"
+"Art Archive), puis « Demander à Brave » (questions dédiées : groupe, chanteur,  \n"
+"album, jaquette, photo, clip, version remastérisée). Le clip officiel et sa  \n"
+"version remastérisée sont cherchés sur YouTube. Saisir le groupe ou le chanteur  \n"
+"avant de chercher évite de confondre des chansons de même titre. À la  \n"
+"validation, le clip (fichier déposé ou lien) et la jaquette sont enregistrés  \n"
+"dans les dossiers que vous choisissez, sous le nom « Chanson (année) Chanteur ou  \n"
+"groupe » ; si une version remastérisée existe, c'est elle qui est téléchargée  \n"
+"en priorité : dès qu'elle est trouvée, elle remplace le clip dans le champ « Clip vidéo »  \n"
+"et c'est elle qui est enregistrée dans la colonne du clip du tableur (le clip d'origine ne sert  \n"
+"qu'en cas d'échec) ; la photo est enregistrée avec la  \n"
+"jaquette et inscrite en hyperlien dans une 13ème colonne ; le lien de la  \n"
+"version remastérisée est ajouté à « Renseignements divers ». \n"
 "   – Les champs « Renseignements divers » et « Préciser la catégorie » \n"
 "acceptent le copier/coller (Ctrl+C / Ctrl+V / Ctrl+X, clic droit).\n"
 "   – « ✅ Valider » : l'affiche et la bande-annonce sont téléchargées \n"
@@ -9744,6 +9939,178 @@ try:
                     "Cliquez sur 🗂 Tableur → 📂 Sélection tableur pour en choisir un.")
                 return ""
             return self._tableur_path
+
+        # ── Chemins mémorisés par case à cocher (Compléter le tableur) ──
+        def _completer_tableur_categorie_cle(self, win):
+            """Nom de la case cochée = clé de mémorisation des chemins.
+            Pour « Autre », la clé reste « Autre » (et non le texte précisé)."""
+            try:
+                for nom, var in win._categorie_vars.items():
+                    if var.get():
+                        return nom
+            except Exception:
+                pass
+            return "(aucune catégorie)"
+
+        def _chemins_categorie(self, cle):
+            d = getattr(self, "_chemins_par_categorie", None)
+            if not isinstance(d, dict):
+                d = self._chemins_par_categorie = {}
+            e = d.get(cle)
+            return e if isinstance(e, dict) else {}
+
+        def _completer_tableur_dialogue_chemins(self, win, cle, est_clip,
+                                                avec_tableur=True, avec_affiche=True, avec_ba=True):
+            """Fenêtre modale récapitulant les chemins mémorisés pour la case
+            cochée (tableur, dossier de l'affiche, dossier de la
+            bande-annonce / du clip). Chaque chemin se modifie avec « Changer… »
+            (ou en le tapant / collant). Renvoie
+            {"tableur": ..., "affiche": ..., "bande_annonce": ...} ou None si
+            l'utilisateur annule. Au premier usage d'une case, les chemins
+            proposés sont ceux du dernier choix. À appeler depuis le thread
+            principal uniquement."""
+            memo = self._chemins_categorie(cle)
+            premiere_fois = not memo
+            defauts = {
+                "tableur": (self._tableur_path or "") if (self._tableur_path and os.path.isfile(self._tableur_path)) else "",
+                "affiche": getattr(self, "_dernier_dossier_affiches", "") or "",
+                "bande_annonce": getattr(self, "_dernier_dossier_bandes_annonces", "") or "",
+            }
+            lignes = []
+            if avec_tableur:
+                lignes.append(("tableur", "📄 Tableur (.ods)", "file"))
+            if avec_affiche:
+                lignes.append(("affiche", "🖼 Dossier jaquette / photo" if est_clip else "🖼 Dossier des affiches", "dir"))
+            if avec_ba:
+                lignes.append(("bande_annonce", "🎞 Dossier des clips vidéo" if est_clip else "🎞 Dossier des bandes-annonces", "dir"))
+
+            dlg = ctk.CTkToplevel(win)
+            dlg.title(f"Chemins — {cle}")
+            dlg.configure(fg_color="#1f1f1f")
+            try:
+                dlg.transient(win)
+            except Exception:
+                pass
+            res = {"val": None}
+            vars_ = {}
+
+            ctk.CTkLabel(dlg, text=f"Chemins pour la catégorie « {cle} »",
+                         font=("Arial", 14, "bold")).pack(anchor="w", padx=14, pady=(12, 2))
+            ctk.CTkLabel(
+                dlg,
+                text=("Première utilisation de cette case : chemins proposés d'après le dernier choix. "
+                      if premiere_fois else
+                      "Chemins mémorisés pour cette case. ")
+                     + "Clique sur « Changer… » pour en modifier un.",
+                font=("Arial", 11), text_color="#aaaaaa", wraplength=620, justify="left"
+            ).pack(anchor="w", padx=14, pady=(0, 8))
+
+            def _changer(key, kind, var):
+                actuel = (var.get() or "").strip()
+                if kind == "file":
+                    ini = os.path.dirname(actuel) if actuel else None
+                    p_ = filedialog.askopenfilename(
+                        parent=dlg, title="Choisir le tableur (.ods)",
+                        initialdir=ini if (ini and os.path.isdir(ini)) else None,
+                        filetypes=[("Fichier OpenDocument", "*.ods"), ("Tous les fichiers", "*.*")])
+                else:
+                    p_ = filedialog.askdirectory(
+                        parent=dlg, title="Choisir le dossier",
+                        initialdir=actuel if (actuel and os.path.isdir(actuel)) else None)
+                if p_:
+                    var.set(os.path.normpath(p_))
+                try:
+                    dlg.lift(); dlg.focus_force()
+                except Exception:
+                    pass
+
+            for key, libelle, kind in lignes:
+                ctk.CTkLabel(dlg, text=libelle, font=("Arial", 12, "bold")).pack(anchor="w", padx=14, pady=(6, 0))
+                ligne = ctk.CTkFrame(dlg, fg_color="transparent")
+                ligne.pack(fill="x", padx=14, pady=(0, 2))
+                v = ctk.StringVar(value=memo.get(key) or defauts.get(key, ""))
+                vars_[key] = v
+                ent = ctk.CTkEntry(ligne, textvariable=v, width=480)
+                ent.pack(side="left", fill="x", expand=True, padx=(0, 8))
+                try:
+                    self._menu_contextuel_champ(ent)
+                except Exception:
+                    pass
+                ctk.CTkButton(ligne, text="Changer…", width=90,
+                              command=lambda k=key, kd=kind, vv=v: _changer(k, kd, vv)).pack(side="left")
+
+            def _valider():
+                out = {}
+                for key, libelle, kind in lignes:
+                    chemin = (vars_[key].get() or "").strip().strip('"')
+                    if kind == "file":
+                        if not chemin or not os.path.isfile(chemin):
+                            messagebox.showwarning(
+                                "Tableur introuvable",
+                                "Choisis un fichier .ods existant (bouton « Changer… »).", parent=dlg)
+                            return
+                    else:
+                        if chemin and not os.path.isdir(chemin):
+                            messagebox.showwarning(
+                                "Dossier introuvable",
+                                f"Ce dossier n'existe pas :\n{chemin}\n\nUtilise « Changer… » pour en choisir un.",
+                                parent=dlg)
+                            return
+                        if not chemin:
+                            nom_cible = "l'affiche" if key == "affiche" else "la bande-annonce / le clip"
+                            if not messagebox.askyesno(
+                                    "Aucun dossier choisi",
+                                    f"Aucun dossier choisi : continuer sans télécharger {nom_cible} ?",
+                                    parent=dlg):
+                                return
+                    out[key] = os.path.normpath(chemin) if chemin else ""
+                # Mémorisation pour CETTE case (on garde les clés non affichées).
+                d = getattr(self, "_chemins_par_categorie", None)
+                if not isinstance(d, dict):
+                    d = self._chemins_par_categorie = {}
+                entree = dict(d.get(cle) or {})
+                for k_, v_ in out.items():
+                    if v_ or k_ not in entree:
+                        entree[k_] = v_
+                d[cle] = entree
+                if out.get("affiche"):
+                    self._dernier_dossier_affiches = out["affiche"]
+                if out.get("bande_annonce"):
+                    self._dernier_dossier_bandes_annonces = out["bande_annonce"]
+                if out.get("tableur") and not (self._tableur_path and os.path.isfile(self._tableur_path)):
+                    self._tableur_path = out["tableur"]   # aucun tableur principal : on le définit
+                self.save_settings()
+                self._trace_recherche(f"Chemins ({cle}) : {out}")
+                res["val"] = out
+                dlg.destroy()
+
+            def _annuler():
+                res["val"] = None
+                dlg.destroy()
+
+            btns = ctk.CTkFrame(dlg, fg_color="transparent")
+            btns.pack(fill="x", padx=14, pady=(10, 12))
+            ctk.CTkButton(btns, text="✅ Valider", width=130, command=_valider).pack(side="right")
+            ctk.CTkButton(btns, text="Annuler", width=100, fg_color="#555555",
+                          hover_color="#666666", command=_annuler).pack(side="right", padx=(0, 8))
+            dlg.protocol("WM_DELETE_WINDOW", _annuler)
+
+            dlg.update_idletasks()
+            try:
+                w_, h_ = max(660, dlg.winfo_reqwidth()), dlg.winfo_reqheight()
+                x_ = win.winfo_rootx() + max(0, (win.winfo_width() - w_) // 2)
+                y_ = win.winfo_rooty() + max(0, (win.winfo_height() - h_) // 3)
+                dlg.geometry(f"{w_}x{h_}+{x_}+{y_}")
+            except Exception:
+                pass
+            dlg.after(150, lambda: (dlg.lift(), dlg.focus_force()))
+            try:
+                dlg.wait_visibility()
+                dlg.grab_set()
+            except Exception:
+                pass
+            win.wait_window(dlg)
+            return res["val"]
 
         def _confirmer_ou_choisir_tableur(self):
             """Avant CHAQUE validation dans « Compléter le tableur », demande
@@ -10199,12 +10566,14 @@ try:
             # écrasée par du vide à la validation).
             divers_row = ctk.CTkFrame(container, fg_color="transparent")
             divers_row.pack(fill="x", pady=(0, 10))
-            ctk.CTkLabel(divers_row, text="Renseignements divers :",
-                         font=("Arial", 12)).pack(side="left", padx=(0, 8))
+            win._label_divers = ctk.CTkLabel(divers_row, text="Renseignements divers :",
+                                             font=("Arial", 12))
+            win._label_divers.pack(side="left", padx=(0, 8))
             win.field_renseignements = ctk.StringVar(value=valeurs.get("renseignements", "") or "")
             _entry_divers = ctk.CTkEntry(divers_row, textvariable=win.field_renseignements, width=220,
                                          placeholder_text="ex : N/B, VOSTFR...")
             _entry_divers.pack(side="left", fill="x", expand=True)
+            win._entry_divers = _entry_divers
             # Copier / coller (Ctrl+C/V/X/A + clic droit), comme les autres champs
             self._menu_contextuel_champ(_entry_divers)
 
@@ -10239,8 +10608,60 @@ try:
             win.field_bande_annonce = _champ("Bande-annonce (URL vidéo)", "bande_annonce")
             win.field_affiche = _champ("Affiche (URL image)", "affiche")
 
-            ctk.CTkLabel(scroll, text="Résumé / synopsis", font=("Arial", 13, "bold"),
-                         anchor="w").pack(fill="x", pady=(8, 2))
+            # ── Bloc « Clip vidéo » (affiché seulement si la case est cochée, voir
+            # _completer_tableur_maj_libelles) : source à analyser (fichier ou lien),
+            # identification de la musique, version remastérisée, photo emblématique.
+            clip_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+            win._clip_frame = clip_frame
+            win._clip_origine = ""  # clip d'origine mis de côté quand une version remastérisée est retenue
+            ctk.CTkLabel(clip_frame, text="🎵 Clip vidéo — identifier la musique",
+                         font=("Arial", 13, "bold"), anchor="w").pack(fill="x", pady=(10, 2))
+            ctk.CTkLabel(clip_frame,
+                         text="Dépose le clip ou la bande son avec « 📂 Fichier… », ou colle son lien. "
+                              "« Identifier » écoute plusieurs passages et remplit les champs vides.",
+                         font=("Arial", 11), text_color="#999999", wraplength=480,
+                         justify="left", anchor="w").pack(fill="x")
+            src_row = ctk.CTkFrame(clip_frame, fg_color="transparent")
+            src_row.pack(fill="x", pady=(4, 0))
+            win.field_clip_source = ctk.StringVar(value=valeurs.get("clip_source", "") or "")
+            _entry_src = ctk.CTkEntry(src_row, textvariable=win.field_clip_source, height=34,
+                                      placeholder_text="Fichier du clip / de la bande son, ou lien (YouTube…)")
+            _entry_src.pack(side="left", fill="x", expand=True)
+            self._menu_contextuel_champ(_entry_src)
+            ctk.CTkButton(src_row, text="📂 Fichier…", width=96, height=34,
+                          command=lambda w=win: self._clip_choisir_fichier(w)).pack(side="left", padx=(6, 0))
+            win.clip_identifier_btn = ctk.CTkButton(
+                clip_frame, text="🎵 Identifier la musique (écoute de plusieurs passages)", height=34,
+                command=lambda w=win: self._clip_identifier_musique(w))
+            win.clip_identifier_btn.pack(fill="x", pady=(6, 0))
+
+            def _champ_clip(label, cle, placeholder=""):
+                ctk.CTkLabel(clip_frame, text=label, font=("Arial", 13, "bold"),
+                             anchor="w").pack(fill="x", pady=(8, 2))
+                var = ctk.StringVar(value=valeurs.get(cle, "") or "")
+                e = ctk.CTkEntry(clip_frame, textvariable=var, height=34, placeholder_text=placeholder)
+                e.pack(fill="x")
+                self._menu_contextuel_champ(e)
+                return var
+
+            win.field_remaster = _champ_clip("Version remastérisée du clip (URL vidéo, si elle existe)", "remaster")
+            win.field_photo = _champ_clip("Photo emblématique du groupe / du chanteur (URL image)", "photo")
+            liens_clip = ctk.CTkFrame(clip_frame, fg_color="transparent")
+            liens_clip.pack(fill="x", pady=(6, 0))
+            ctk.CTkButton(liens_clip, text="▶ Version remastérisée", height=30, width=1,
+                          fg_color="transparent", border_width=1,
+                          command=lambda w=win: self._completer_tableur_ouvrir_champ(
+                              w, "field_remaster", "version remastérisée")).pack(
+                side="left", expand=True, fill="x", padx=(0, 4))
+            ctk.CTkButton(liens_clip, text="🖼 Photo", height=30, width=1,
+                          fg_color="transparent", border_width=1,
+                          command=lambda w=win: self._completer_tableur_ouvrir_champ(
+                              w, "field_photo", "photo")).pack(
+                side="left", expand=True, fill="x", padx=(4, 0))
+
+            win._resume_label = ctk.CTkLabel(scroll, text="Résumé / synopsis", font=("Arial", 13, "bold"),
+                                             anchor="w")
+            win._resume_label.pack(fill="x", pady=(8, 2))
             resume_box = ctk.CTkTextbox(scroll, height=130, font=("Arial", 12), wrap="word")
             resume_box.pack(fill="both", expand=True)
             resume_box.insert("1.0", valeurs.get("resume", "") or "")
@@ -10489,7 +10910,10 @@ try:
             theatre = self._completer_tableur_est_theatre(win)
             animation = self._completer_tableur_est_animation(win)
             # Une seule case peut être cochée : théâtre et animation s'excluent.
-            if theatre:
+            clip = self._completer_tableur_est_clip(win)
+            if clip:
+                texte_personnes = "Chanteur et membres du groupe (séparés par « / »)"
+            elif theatre:
                 texte_personnes = "Comédiens (séparés par « / »)"
             elif animation:
                 texte_personnes = "Voix française (séparées par « / »)"
@@ -10497,7 +10921,12 @@ try:
                 texte_personnes = "Acteurs (séparés par « / »)"
             libelles = {
                 "personnes": texte_personnes,
-                "realisateur": "Mise en scène" if theatre else "Réalisateur (Filmeur)",
+                "realisateur": ("Groupe (nom du groupe, vide si artiste solo)" if clip else
+                                "Mise en scène" if theatre else "Réalisateur (Filmeur)"),
+                "titre": "Titre de la chanson" if clip else "Titre",
+                "type": "Album" if clip else "Type (genre)",
+                "affiche": "Jaquette de l'album (URL image)" if clip else "Affiche (URL image)",
+                "bande_annonce": "Clip vidéo (URL vidéo, ou fichier)" if clip else "Bande-annonce (URL vidéo)",
             }
             etiquettes = getattr(win, "_labels_champs", {}) or {}
             for cle, texte in libelles.items():
@@ -10506,6 +10935,38 @@ try:
                     continue
                 try:
                     lbl.configure(text=texte)
+                except Exception:
+                    pass
+            # « Clip vidéo » : « Résumé / synopsis » devient « Anecdote(s) », et « Renseignements
+            # divers » sert à indiquer reprise, duo, etc. (textes d'origine rétablis sinon).
+            try:
+                lbl_r = getattr(win, "_resume_label", None)
+                if lbl_r is not None:
+                    lbl_r.configure(text="Anecdote(s) / histoire de la chanson ou du clip" if clip
+                                    else "Résumé / synopsis")
+                lbl_d = getattr(win, "_label_divers", None)
+                if lbl_d is not None:
+                    lbl_d.configure(text="Renseignements divers (reprise, duo…) :" if clip
+                                    else "Renseignements divers :")
+                ent_d = getattr(win, "_entry_divers", None)
+                if ent_d is not None:
+                    ent_d.configure(placeholder_text="ex : reprise de…, duo, bande originale…" if clip
+                                    else "ex : N/B, VOSTFR...")
+            except Exception:
+                pass
+            # Bloc « Clip vidéo » (source à analyser, version remastérisée, photo) :
+            # visible UNIQUEMENT quand la case « Clip vidéo » est cochée.
+            cadre_clip = getattr(win, "_clip_frame", None)
+            if cadre_clip is not None:
+                try:
+                    if clip:
+                        avant_widget = getattr(win, "_resume_label", None)
+                        if avant_widget is not None:
+                            cadre_clip.pack(fill="x", before=avant_widget)
+                        else:
+                            cadre_clip.pack(fill="x")
+                    else:
+                        cadre_clip.pack_forget()
                 except Exception:
                     pass
 
@@ -11488,6 +11949,904 @@ try:
                                       f"retenue ({choix['source']}). Indique l'année pour en choisir une autre.")
             return choix
 
+        # ══════════════════════════════════════════════════════════════
+        # 🎵 CATÉGORIE « CLIP VIDÉO » (Compléter le tableur)
+        #   • identification de la musique d'un clip / d'une bande son
+        #     (fichier ou lien) par empreinte audio — Shazam (paquet
+        #     « shazamio ») : plusieurs passages sont écoutés, car le début
+        #     d'un clip ne correspond souvent pas au début de la chanson ;
+        #   • recherche des champs musicaux (groupe, chanteur, année, album,
+        #     jaquette, photo) sur Deezer, Apple Music / iTunes et
+        #     MusicBrainz + Cover Art Archive (aucune clé API nécessaire) ;
+        #   • clip officiel et version remastérisée cherchés sur YouTube ;
+        #   • questions spécifiques pour « Demander à Brave ».
+        # Correspondance avec les colonnes du tableur (rien de nouveau dans
+        # les 12 premières colonnes) : Titre = chanson, Année, Résumé =
+        # ANECDOTE(S), Personnes (4ème colonne, comme des acteurs) = CHANTEUR
+        # + MEMBRES DU GROUPE séparés par « / », Type = ALBUM, Réalisateur =
+        # GROUPE (vide pour un artiste solo), Renseignements divers = reprise,
+        # duo… (+ « Version remastérisée : lien »), Affiche =
+        # JAQUETTE (hyperlien local), Bande-annonce = CLIP (hyperlien local),
+        # Catégorie = « Clip vidéo ». La PHOTO emblématique est enregistrée
+        # dans le dossier des jaquettes et inscrite en hyperlien dans une
+        # 13ème colonne (créée seulement quand il y a une photo).
+        # ══════════════════════════════════════════════════════════════
+        def _completer_tableur_est_clip(self, win):
+            """True UNIQUEMENT si la case « Clip vidéo » est cochée."""
+            try:
+                v = win._categorie_vars.get("Clip vidéo")
+                return bool(v and v.get())
+            except Exception:
+                return False
+
+        # ── Petits outils communs ──────────────────────────────────
+        def _musique_json(self, url, timeout=12):
+            """GET + décodage JSON (Deezer, iTunes, MusicBrainz)."""
+            req = urllib.request.Request(url, headers={
+                "User-Agent": f"Citron/{CITRON_VERSION} (lecteur video personnel; usage personnel)",
+                "Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode("utf-8", errors="ignore"))
+
+        def _musique_mb_attendre(self):
+            """MusicBrainz impose au plus 1 requête par seconde."""
+            delta = time.time() - getattr(self, "_mb_dernier_appel", 0)
+            if delta < 1.1:
+                time.sleep(1.1 - delta)
+            self._mb_dernier_appel = time.time()
+
+        def _musique_url_existe(self, url):
+            """Vérifie par une requête HEAD qu'une image existe (Cover Art Archive)."""
+            try:
+                req = urllib.request.Request(url, method="HEAD", headers={
+                    "User-Agent": f"Citron/{CITRON_VERSION} (lecteur video personnel; usage personnel)"})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    return 200 <= r.status < 400
+            except urllib.error.HTTPError as ex:
+                return ex.code in (403, 405)
+            except Exception:
+                return False
+
+        def _musique_mots(self, s):
+            """Mots d'un titre / nom, sans accents ni ponctuation (apostrophes
+            droites et typographiques traitées pareil)."""
+            import re
+            c = self._tableur_search_clean((s or "").replace("’", "'"))
+            c = re.sub(r"[^a-z0-9' ]+", " ", c).replace("'", " ")
+            return [m for m in c.split() if m]
+
+        def _musique_titre_ok(self, voulu, trouve):
+            """Tous les mots significatifs du titre voulu figurent, comme mots
+            entiers, dans le titre trouvé."""
+            vides = {"le", "la", "les", "l", "de", "des", "du", "un", "une", "et", "the", "a", "an", "and"}
+            mv = [m for m in self._musique_mots(voulu) if m not in vides and len(m) > 1] \
+                or self._musique_mots(voulu)
+            if not mv:
+                return False
+            mt = set(self._musique_mots(trouve))
+            return all(m in mt for m in mv)
+
+        def _musique_parasite(self, voulu, trouve):
+            """True si le titre trouvé est une AUTRE version (live, remix,
+            karaoké...) que celle demandée."""
+            mv = set(self._musique_mots(voulu))
+            mt = set(self._musique_mots(trouve))
+            return any(p in mt and p not in mv for p in
+                       ("live", "remix", "karaoke", "instrumental", "acoustic", "cover",
+                        "tribute", "demo", "medley"))
+
+        def _musique_nom_ok(self, voulu, trouve):
+            """Le nom d'artiste voulu correspond au nom trouvé (« The Beatles » =
+            « Beatles »)."""
+            vides = {"the", "a", "an", "and", "et", "le", "la", "les"}
+            mv = [m for m in self._musique_mots(voulu) if m not in vides] or self._musique_mots(voulu)
+            if not mv:
+                return True
+            mt = set(self._musique_mots(trouve))
+            return all(m in mt for m in mv)
+
+        def _musique_artiste_principal(self, champs):
+            """Nom de l'artiste principal d'après le formulaire : le GROUPE (champ « Réalisateur »)
+            s'il est saisi, sinon le premier nom de « Chanteur et membres » (sans « (chant) »)."""
+            import re
+            g = (champs.get("realisateur") or "").strip()
+            if g:
+                return g
+            p = (champs.get("personnes") or "").strip()
+            premier = re.split(r"\s*/\s*", p)[0] if p else ""
+            return re.sub(r"\s*\([^)]*\)", "", premier).strip()
+
+        def _musique_hint_artiste(self):
+            """Groupe ou chanteur déjà saisi dans le formulaire (transmis par la recherche pas à
+            pas) : sert à départager les titres homonymes."""
+            return self._musique_artiste_principal(getattr(self, "_recherche_champs_actuels", None) or {})
+
+        def _musique_minutes(self, secondes):
+            try:
+                s = float(secondes)
+            except (TypeError, ValueError):
+                return ""
+            return str(max(1, int(round(s / 60.0)))) if s > 0 else ""
+
+        def _musique_image_valide(self, url):
+            u = (url or "").strip()
+            return bool(u) and "/images/artist//" not in u and "/images/cover//" not in u \
+                and self._format_image_autorise(u)
+
+        def _musique_info_artiste(self, nom):
+            """{'type': 'groupe' | 'chanteur' | '', 'id': identifiant MusicBrainz} (mis en cache).
+            Group / Orchestra / Choir = groupe, Person = chanteur."""
+            cle = self._tableur_search_clean(nom)
+            cache = self.__dict__.setdefault("_musique_cache_type", {})
+            if cle in cache:
+                return cache[cle]
+            info = {"type": "", "id": ""}
+            try:
+                self._musique_mb_attendre()
+                q = urllib.parse.quote(f'artist:"{nom}"')
+                data = self._musique_json(
+                    f"https://musicbrainz.org/ws/2/artist/?query={q}&fmt=json&limit=5")
+                for a in data.get("artists") or []:
+                    n = a.get("name") or ""
+                    if self._musique_nom_ok(nom, n) and self._musique_nom_ok(n, nom):
+                        info["id"] = a.get("id") or ""
+                        t = (a.get("type") or "").lower()
+                        if t in ("group", "orchestra", "choir"):
+                            info["type"] = "groupe"
+                        elif t == "person":
+                            info["type"] = "chanteur"
+                        break
+            except Exception as ex:
+                self._trace_recherche(f"MusicBrainz (type d'artiste) : {type(ex).__name__}: {ex}")
+            cache[cle] = info
+            self._trace_recherche(f"Artiste « {nom} » : {info['type'] or 'type inconnu → chanteur par défaut'}")
+            return info
+
+        def _musique_classer_artiste(self, nom):
+            return self._musique_info_artiste(nom)["type"]
+
+        def _musique_membres(self, nom, annee=None):
+            """Membres d'un groupe (MusicBrainz), au format « A (chant) / B / C » : le chanteur
+            en premier, puis les autres ; seuls les membres présents l'année de la chanson sont
+            gardés (membres actuels si l'année est inconnue). \"\" si rien de fiable."""
+            mbid = self._musique_info_artiste(nom).get("id")
+            if not mbid:
+                return ""
+            try:
+                self._musique_mb_attendre()
+                data = self._musique_json(
+                    f"https://musicbrainz.org/ws/2/artist/{mbid}?inc=artist-rels&fmt=json")
+            except Exception as ex:
+                self._trace_recherche(f"MusicBrainz (membres) : {type(ex).__name__}: {ex}")
+                return ""
+            an = str(annee or "").strip()
+            membres = []
+            for rel in data.get("relations") or []:
+                if rel.get("type") != "member of band":
+                    continue
+                a = rel.get("artist") or {}
+                nom_m = (a.get("name") or "").strip()
+                if not nom_m or a.get("id") == mbid:
+                    continue
+                debut = (rel.get("begin") or "")[:4]
+                fin = (rel.get("end") or "")[:4]
+                if an.isdigit():
+                    if (debut and debut > an) or (fin and fin < an):
+                        continue
+                elif rel.get("ended"):
+                    continue
+                attrs = [str(x).lower() for x in (rel.get("attributes") or [])]
+                chant = any("vocal" in x for x in attrs)
+                membres.append((0 if chant else 1, len(membres), nom_m + (" (chant)" if chant else "")))
+            membres.sort(key=lambda m: (m[0], m[1]))
+            vus, sortie = set(), []
+            for _a, _b, txt in membres:
+                if txt not in vus:
+                    vus.add(txt)
+                    sortie.append(txt)
+            self._trace_recherche(f"Membres de « {nom} » ({an or 'année inconnue'}) : "
+                                  f"{' / '.join(sortie) or 'aucun trouvé'}")
+            return " / ".join(sortie[:12])
+
+        def _musique_attribuer(self, res, nom):
+            """Range l'artiste dans le résultat. 4ème colonne (« Chanteur et membres », comme des
+            acteurs) : un GROUPE y donne ses membres (chanteur en premier), un chanteur y donne son
+            nom ; le nom du groupe va dans « Groupe ». Les invités (feat., &…) sont ajoutés à la
+            liste et signalés dans « Renseignements divers »."""
+            import re
+            nom = (nom or "").strip()
+            if not nom:
+                return
+            if self._musique_classer_artiste(nom) == "groupe":
+                principal, invites = nom, []      # « Simon & Garfunkel » : un groupe, pas un duo à couper
+            else:
+                noms = [x.strip() for x in re.split(
+                    r"\s+(?:feat\.?|ft\.?|featuring|avec|&|x)\s+|\s*,\s*", nom, flags=re.I) if x.strip()]
+                principal, invites = (noms[0], noms[1:]) if noms else (nom, [])
+            if self._musique_classer_artiste(principal) == "groupe":
+                res["realisateur"] = principal
+                membres = self._musique_membres(principal, res.get("annee"))
+                liste = ([membres] if membres else []) + invites
+                if liste:
+                    res["personnes"] = " / ".join(liste)
+            else:
+                res["personnes"] = " / ".join([principal] + invites)
+            if invites and not res.get("renseignements"):
+                res["renseignements"] = "Avec la participation de " + ", ".join(invites)
+
+        # ── Sources musicales (aucune clé API) ─────────────────────
+        def _rechercher_deezer(self, titre, annee_cible=None):
+            """Deezer : album, jaquette (1000 px), photo de l'artiste, durée,
+            année. L'album retenu est le plus ancien ALBUM (et non une
+            compilation « Greatest Hits »), ou celui de l'année indiquée."""
+            hint = self._musique_hint_artiste()
+            requete = f'track:"{titre}"' + (f' artist:"{hint}"' if hint else "")
+            data = self._musique_json(
+                "https://api.deezer.com/search?q=" + urllib.parse.quote(requete) + "&limit=30")
+            if data.get("error"):
+                raise RuntimeError(f"Deezer : {data['error']}")
+            pistes = [p for p in (data.get("data") or [])
+                      if self._musique_titre_ok(titre, p.get("title") or "")
+                      and not self._musique_parasite(titre, p.get("title") or "")
+                      and (not hint or self._musique_nom_ok(hint, (p.get("artist") or {}).get("name") or ""))]
+            if not pistes:
+                self._trace_recherche("Deezer : aucune piste ne correspond au titre"
+                                      + (" et à l'artiste" if hint else ""))
+                return None
+            artiste = pistes[0].get("artist") or {}
+            artistes = []
+            for p in pistes:
+                n = (p.get("artist") or {}).get("name") or ""
+                if n and n not in artistes:
+                    artistes.append(n)
+            pistes = [p for p in pistes if (p.get("artist") or {}).get("id") == artiste.get("id")]
+            rang = {"album": 0, "ep": 1, "single": 2}
+            candidats = []
+            for p in pistes[:6]:
+                alb = p.get("album") or {}
+                det = {}
+                if alb.get("id"):
+                    try:
+                        det = self._musique_json(f"https://api.deezer.com/album/{alb['id']}")
+                    except Exception:
+                        det = {}
+                date = (det.get("release_date") or "").strip()
+                annee_alb = date[:4]
+                cle = (0 if (annee_cible and annee_alb == str(annee_cible).strip()) else 1,
+                       rang.get((det.get("record_type") or "").lower(), 3),
+                       date or "9999")
+                candidats.append((cle, p, det, alb))
+            candidats.sort(key=lambda c: c[0])
+            _cle, p, det, alb = candidats[0]
+            date = (det.get("release_date") or "")
+            res = {"titre": p.get("title_short") or p.get("title") or titre,
+                   "annee": date[:4],
+                   "type": det.get("title") or alb.get("title") or "",
+                   "duree": self._musique_minutes(p.get("duration")),
+                   "source": p.get("link") or "https://www.deezer.com/"}
+            cover = alb.get("cover_xl") or det.get("cover_xl") or ""
+            if self._musique_image_valide(cover):
+                res["affiche"] = cover
+            photo = artiste.get("picture_xl") or ""
+            if self._musique_image_valide(photo):
+                res["photo"] = photo
+            self._musique_attribuer(res, artiste.get("name") or "")
+            if len(artistes) > 1 and not hint:
+                res["_info"] = ("⚠️ Plusieurs artistes portent ce titre sur Deezer : "
+                                + ", ".join(artistes[:5]) + f". Retenu : {artistes[0]}. "
+                                "Renseigne le groupe ou le chanteur puis relance pour affiner.")
+            return res
+
+        def _rechercher_itunes(self, titre, annee_cible=None):
+            """Apple Music / iTunes : album, jaquette (1000 px), année, durée."""
+            hint = self._musique_hint_artiste()
+            params = urllib.parse.urlencode({
+                "term": f"{hint} {titre}".strip(), "entity": "song", "media": "music",
+                "country": "FR", "limit": 30})
+            data = self._musique_json("https://itunes.apple.com/search?" + params)
+            compil = ("greatest hits", "best of", "collection", "anthology", "essential",
+                      "platinum", "gold", "hits", "live", "compilation", "ultimate", "forever")
+            pistes = [p for p in (data.get("results") or [])
+                      if self._musique_titre_ok(titre, p.get("trackName") or "")
+                      and not self._musique_parasite(titre, p.get("trackName") or "")
+                      and (not hint or self._musique_nom_ok(hint, p.get("artistName") or ""))]
+            if not pistes:
+                self._trace_recherche("iTunes : aucune piste ne correspond au titre"
+                                      + (" et à l'artiste" if hint else ""))
+                return None
+            artiste = pistes[0].get("artistName") or ""
+            pistes = [p for p in pistes if (p.get("artistName") or "") == artiste]
+
+            def _cle(p):
+                alb = (p.get("collectionName") or "").lower()
+                date = (p.get("releaseDate") or "")[:10]
+                return (0 if (annee_cible and date[:4] == str(annee_cible).strip()) else 1,
+                        1 if any(c in alb for c in compil) else 0,
+                        date or "9999")
+            pistes.sort(key=_cle)
+            p = pistes[0]
+            art = (p.get("artworkUrl100") or "")
+            art = art.replace("100x100bb", "1000x1000bb").replace("100x100", "1000x1000")
+            res = {"titre": p.get("trackName") or titre,
+                   "annee": (p.get("releaseDate") or "")[:4],
+                   "type": p.get("collectionName") or "",
+                   "duree": self._musique_minutes((p.get("trackTimeMillis") or 0) / 1000.0),
+                   "source": p.get("trackViewUrl") or "https://music.apple.com/"}
+            if self._musique_image_valide(art):
+                res["affiche"] = art
+            self._musique_attribuer(res, artiste)
+            return res
+
+        def _rechercher_musicbrainz(self, titre, annee_cible=None):
+            """MusicBrainz : année de première sortie (la plus fiable), album
+            officiel le plus ancien, jaquette via la Cover Art Archive."""
+            hint = self._musique_hint_artiste()
+            q = f'recording:"{titre}"' + (f' AND artist:"{hint}"' if hint else "")
+            self._musique_mb_attendre()
+            data = self._musique_json(
+                "https://musicbrainz.org/ws/2/recording?query=" + urllib.parse.quote(q)
+                + "&fmt=json&limit=20")
+            recs = []
+            for r in data.get("recordings") or []:
+                nom = "".join((c.get("name") or "") + (c.get("joinphrase") or "")
+                              for c in (r.get("artist-credit") or [])).strip()
+                t = r.get("title") or ""
+                if not self._musique_titre_ok(titre, t) or self._musique_parasite(titre, t):
+                    continue
+                if hint and not self._musique_nom_ok(hint, nom):
+                    continue
+                recs.append((r, nom))
+            if not recs:
+                self._trace_recherche("MusicBrainz : aucun enregistrement ne correspond au titre"
+                                      + (" et à l'artiste" if hint else ""))
+                return None
+            r, nom = recs[0]
+            toutes = r.get("releases") or []
+            officielles = [x for x in toutes if x.get("status") == "Official"] or toutes
+
+            def _album(x):
+                rg = x.get("release-group") or {}
+                return rg.get("primary-type") == "Album" and not (rg.get("secondary-types") or [])
+            albums = [x for x in officielles if _album(x)] or officielles
+            albums.sort(key=lambda x: (0 if (annee_cible and (x.get("date") or "")[:4] == str(annee_cible).strip()) else 1,
+                                       x.get("date") or "9999"))
+            album = albums[0] if albums else {}
+            annee = ((r.get("first-release-date") or "") or (album.get("date") or ""))[:4]
+            res = {"titre": r.get("title") or titre, "annee": annee,
+                   "type": album.get("title") or "",
+                   "duree": self._musique_minutes((r.get("length") or 0) / 1000.0),
+                   "source": f"https://musicbrainz.org/recording/{r.get('id')}"}
+            try:
+                self._musique_mb_attendre()
+                det = self._musique_json(
+                    f"https://musicbrainz.org/ws/2/recording/{r.get('id')}?inc=work-rels&fmt=json")
+                for rel in det.get("relations") or []:
+                    attrs = [str(x).lower() for x in (rel.get("attributes") or [])]
+                    oeuvre = ((rel.get("work") or {}).get("title") or "").strip()
+                    if "cover" in attrs:
+                        res["renseignements"] = "Reprise (cover)" + (f" de « {oeuvre} »" if oeuvre else "")
+                        break
+            except Exception as ex:
+                self._trace_recherche(f"MusicBrainz (reprise ?) : {type(ex).__name__}: {ex}")
+            bases = []
+            rg_id = (album.get("release-group") or {}).get("id")
+            if rg_id:
+                bases.append(f"https://coverartarchive.org/release-group/{rg_id}")
+            if album.get("id"):
+                bases.append(f"https://coverartarchive.org/release/{album['id']}")
+            for base in bases:
+                for taille in ("front-1200", "front-500"):
+                    if self._musique_url_existe(f"{base}/{taille}"):
+                        res["affiche"] = f"{base}/{taille}"
+                        break
+                if res.get("affiche"):
+                    break
+            self._musique_attribuer(res, nom)
+            return res
+
+        # ── Clip officiel / version remastérisée sur YouTube ───────
+        def _clip_chercher_video(self, titre, artiste, remaster=False):
+            """Cherche sur YouTube le clip officiel (ou sa version remastérisée)
+            de « artiste — titre ». Chaque résultat est vérifié : le titre de la
+            vidéo doit contenir le titre de la chanson ET le nom de l'artiste, et
+            les versions live / paroles / cover / karaoké... sont écartées.
+            Renvoie l'URL, ou "" si rien de fiable."""
+            import re
+            if not (titre or "").strip() or not (artiste or "").strip():
+                self._trace_recherche("Clip : titre ou artiste manquant, recherche YouTube ignorée")
+                return ""
+            requete = f"{artiste} {titre} " + ("remastered official video" if remaster else "clip officiel")
+            url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote(requete)
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; Citron/1.0; usage personnel)",
+                       "Accept-Language": "fr-FR,fr;q=0.9"}
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    html_text = r.read().decode("utf-8", errors="ignore")
+            except Exception as ex:
+                self._trace_recherche(f"Clip (YouTube) : échec réseau — {type(ex).__name__}: {ex}")
+                return ""
+            videos = []
+            m = re.search(r"var ytInitialData\s*=\s*(\{.*?\});</script>", html_text, re.DOTALL)
+            if not m:
+                self._trace_recherche("Clip (YouTube) : bloc ytInitialData introuvable")
+                return ""
+            try:
+                data = json.loads(m.group(1))
+            except Exception as ex:
+                self._trace_recherche(f"Clip (YouTube) : données illisibles — {type(ex).__name__}: {ex}")
+                return ""
+
+            def _walk(node):
+                if isinstance(node, dict):
+                    if "videoRenderer" in node:
+                        vr = node["videoRenderer"]
+                        try:
+                            t = vr["title"]["runs"][0]["text"]
+                        except Exception:
+                            t = ""
+                        try:
+                            chaine = vr["ownerText"]["runs"][0]["text"]
+                        except Exception:
+                            chaine = ""
+                        if vr.get("videoId"):
+                            videos.append({"id": vr["videoId"], "titre": t, "chaine": chaine})
+                    for v in node.values():
+                        _walk(v)
+                elif isinstance(node, list):
+                    for v in node:
+                        _walk(v)
+            _walk(data)
+            interdit = re.compile(
+                r"(?i)\b(lyrics?|paroles|karaok[eé]|cover|reaction|r[ée]action|tutorial|tuto|"
+                r"live|concert|remix|slowed|sped up|nightcore|8d|instrumental|1 hour|extended|piano|guitar)\b")
+            exige_remaster = re.compile(r"(?i)remaster|remasteris|restaur|restored|4k|uhd")
+            titre_demande = f"{titre} {artiste}"
+            retenues = []
+            for v in videos:
+                tv = v["titre"]
+                if not self._musique_titre_ok(titre, tv) or not self._musique_nom_ok(artiste, tv + " " + v["chaine"]):
+                    continue
+                m_int = interdit.search(tv)
+                if m_int and m_int.group(1).lower() not in titre_demande.lower():
+                    continue
+                if remaster and not exige_remaster.search(tv):
+                    continue
+                score = 0
+                if re.search(r"(?i)official|officiel|clip", tv):
+                    score += 2
+                if "vevo" in v["chaine"].lower() or self._musique_nom_ok(artiste, v["chaine"]):
+                    score += 1
+                retenues.append((-score, len(retenues), v))
+            if not retenues:
+                self._trace_recherche(f"Clip (YouTube) : {len(videos)} résultat(s), aucun fiable"
+                                      + (" (version remastérisée)" if remaster else ""))
+                return ""
+            retenues.sort(key=lambda x: (x[0], x[1]))
+            return f"https://www.youtube.com/watch?v={retenues[0][2]['id']}"
+
+        def _clip_completer_videos(self, resultat, champs_actuels, titre, annee, ba_vide, remaster_vide):
+            """Complète le résultat d'une source avec le clip officiel (champ
+            « Clip vidéo ») et la version remastérisée, cherchés sur YouTube."""
+            fusion = dict(champs_actuels)
+            for k in ("personnes", "realisateur"):
+                if resultat.get(k) and not fusion.get(k):
+                    fusion[k] = resultat[k]
+            artiste = self._musique_artiste_principal(fusion)
+            try:
+                if ba_vide and not (resultat.get("bande_annonce") or "").strip():
+                    resultat["bande_annonce"] = self._clip_chercher_video(titre, artiste, False)
+                    self._trace_recherche(f"Clip officiel → {resultat['bande_annonce'] or 'rien de fiable'}")
+                if remaster_vide and not (resultat.get("remaster") or "").strip():
+                    rem = self._clip_chercher_video(titre, artiste, True)
+                    if rem and rem == (resultat.get("bande_annonce") or champs_actuels.get("bande_annonce") or ""):
+                        rem = ""
+                    resultat["remaster"] = rem
+                    self._trace_recherche(f"Version remastérisée → {rem or 'aucune trouvée'}")
+            except Exception as ex:
+                self._trace_recherche(f"Clip : ÉCHEC recherche vidéo — {type(ex).__name__}: {ex}")
+
+        # ── Identification de la musique (Shazam) ──────────────────
+        def _clip_choisir_fichier(self, win):
+            """Choix du clip vidéo ou de la bande son à analyser."""
+            chemin = filedialog.askopenfilename(
+                parent=win, title="Clip vidéo ou bande son à analyser",
+                filetypes=[("Vidéo / audio",
+                            "*.mp4 *.mkv *.avi *.mov *.webm *.ts *.mts *.m2ts *.wmv *.flv *.mpg *.mpeg "
+                            "*.mp3 *.flac *.wav *.m4a *.aac *.ogg *.opus *.wma"),
+                           ("Tous les fichiers", "*.*")])
+            if chemin:
+                win.field_clip_source.set(os.path.normpath(chemin))
+                try:
+                    win.status_label.configure(
+                        text="📂 Fichier choisi. Clique sur « 🎵 Identifier la musique ».",
+                        text_color="#cccccc")
+                except Exception:
+                    pass
+
+        def _clip_ffmpeg(self):
+            ff = self._get_ffmpeg_path()
+            if not ff:
+                raise RuntimeError("ffmpeg est introuvable (installe-le ou place ffmpeg.exe à côté de Citron.py).")
+            return ff
+
+        def _clip_duree(self, chemin):
+            """Durée (secondes) d'un fichier audio/vidéo, lue dans la sortie de
+            « ffmpeg -i » ; None si illisible."""
+            import re
+            try:
+                flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                p = subprocess.run([self._clip_ffmpeg(), "-hide_banner", "-i", chemin],
+                                   capture_output=True, text=True, errors="ignore",
+                                   timeout=30, creationflags=flags)
+                m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", (p.stderr or "") + (p.stdout or ""))
+                if m:
+                    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+            except Exception as ex:
+                self._trace_recherche(f"Clip : durée illisible — {type(ex).__name__}: {ex}")
+            return None
+
+        def _clip_decalages(self, duree, longueur=12):
+            """Points d'écoute (secondes), du plus probable au moins probable :
+            milieu du morceau d'abord (refrain), puis d'autres passages — le début
+            d'un clip est souvent un court-métrage sans la musique du disque."""
+            if not duree:
+                return [20.0, 50.0, 80.0, 110.0, 140.0, 170.0]  # durée illisible : passages « à l'aveugle »
+            if duree <= longueur + 3:
+                return [0.0]
+            fractions = (0.45, 0.60, 0.30, 0.75, 0.15, 0.88)
+            out = []
+            for f in fractions:
+                d = max(0.0, min(duree * f, duree - longueur))
+                if all(abs(d - x) > 4 for x in out):
+                    out.append(round(d, 1))
+            return out
+
+        def _clip_extraire_audio(self, chemin, debut, longueur=12):
+            """Extrait `longueur` secondes à partir de `debut` en WAV mono 44,1 kHz."""
+            fd, sortie = tempfile.mkstemp(suffix=".wav", prefix="citron_extrait_")
+            os.close(fd)
+            flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            cmd = [self._clip_ffmpeg(), "-y", "-hide_banner", "-loglevel", "error",
+                   "-ss", str(max(0, debut)), "-t", str(longueur), "-i", chemin,
+                   "-vn", "-ac", "1", "-ar", "44100", "-acodec", "pcm_s16le", sortie]
+            p = subprocess.run(cmd, capture_output=True, errors="ignore", timeout=120, creationflags=flags)
+            if p.returncode != 0 or not os.path.isfile(sortie) or os.path.getsize(sortie) < 2000:
+                try:
+                    os.remove(sortie)
+                except Exception:
+                    pass
+                raise RuntimeError("ffmpeg n'a pas pu extraire l'audio de ce passage.")
+            return sortie
+
+        def _clip_telecharger_audio(self, url):
+            """Télécharge l'AUDIO d'un lien (yt-dlp) dans un fichier temporaire.
+            Renvoie (chemin, indices) ; `indices` = titre/artiste/album que la
+            plateforme connaît déjà (utile si Shazam ne reconnaît rien)."""
+            try:
+                import yt_dlp
+            except ImportError:
+                raise RuntimeError("Le paquet 'yt-dlp' n'est pas installé (pip install yt-dlp).")
+            fd, base = tempfile.mkstemp(prefix="citron_clip_audio_")
+            os.close(fd)
+            try:
+                os.remove(base)
+            except Exception:
+                pass
+            opts = {"format": "bestaudio/best", "outtmpl": base + ".%(ext)s", "quiet": True,
+                    "noplaylist": True}
+            ff = self._get_ffmpeg_path()
+            if ff:
+                opts["ffmpeg_location"] = ff
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                chemin = ydl.prepare_filename(info)
+            indices = {"titre_video": info.get("title") or "", "piste": info.get("track") or "",
+                       "artiste": info.get("artist") or "", "album": info.get("album") or "",
+                       "annee": str(info.get("release_year") or "")}
+            return chemin, indices
+
+        def _clip_deviner_depuis_nom(self, nom, est_chemin=False):
+            """« Artiste - Titre (Official Video) » -> (artiste, titre) ; ("", "") si le
+            nom ne suit pas ce modèle. Simple INDICE, à vérifier."""
+            import re
+            n = os.path.splitext(os.path.basename(nom or ""))[0] if est_chemin else (nom or "")
+            n = re.sub(r"[_]+", " ", n).strip()
+            m = re.match(r"^\s*(.+?)\s+[-–—]\s+(.+?)\s*$", n)
+            if not m:
+                return "", ""
+            artiste, titre = m.group(1).strip(), m.group(2).strip()
+            titre = re.sub(r"\s*[\(\[][^\)\]]*(?:official|officiel|clip|video|vidéo|lyrics|audio|hd|4k|remaster)[^\)\]]*[\)\]]\s*",
+                           " ", titre, flags=re.I).strip(" -–—")
+            return artiste, titre
+
+        def _clip_assurer_shazamio(self, maj=None):
+            """Installe « shazamio » automatiquement (pip, une seule fois) s'il manque,
+            comme Citron le fait déjà pour edge-tts : plus besoin de l'ajouter à
+            Installer_Citron.bat. Lève RuntimeError si l'installation échoue."""
+            import importlib
+            try:
+                importlib.import_module("shazamio")
+                return
+            except ImportError:
+                pass
+            if maj:
+                maj("⏳ Installation de « shazamio » (une seule fois, quelques instants)…")
+            flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            r = subprocess.run([sys.executable, "-m", "pip", "install", "shazamio"],
+                               capture_output=True, text=True, errors="ignore",
+                               timeout=600, creationflags=flags)
+            self._trace_recherche(f"pip install shazamio : code {r.returncode} — "
+                                  f"{((r.stderr or r.stdout or '').strip()[-300:])}")
+            importlib.invalidate_caches()
+            try:
+                importlib.import_module("shazamio")
+            except ImportError:
+                raise RuntimeError(
+                    "Installation automatique de « shazamio » impossible. Ouvre une invite de "
+                    "commandes et tape :  pip install shazamio  puis relance Citron.")
+
+        async def _clip_shazam_async(self, fichier):
+            from shazamio import Shazam
+            shazam = Shazam()
+            fonction = getattr(shazam, "recognize", None) or getattr(shazam, "recognize_song")
+            return await fonction(fichier)
+
+        def _clip_shazam_lire(self, sortie):
+            """Réponse Shazam -> {titre, artiste, album, annee, jaquette, lien} ou None."""
+            import re
+            piste = (sortie or {}).get("track")
+            if not piste:
+                return None
+            album, annee = "", ""
+            for section in piste.get("sections") or []:
+                for meta in section.get("metadata") or []:
+                    t = (meta.get("title") or "").strip().lower()
+                    if t == "album":
+                        album = (meta.get("text") or "").strip()
+                    elif t in ("released", "sortie", "date de sortie"):
+                        m = re.search(r"(?:19|20)\d{2}", meta.get("text") or "")
+                        if m:
+                            annee = m.group(0)
+            images = piste.get("images") or {}
+            jaquette = images.get("coverarthq") or images.get("coverart") or ""
+            if "mzstatic.com" in jaquette:
+                jaquette = re.sub(r"/\d+x\d+(?:cc|bb)?\.(jpg|png)$", r"/1000x1000bb.\1", jaquette)
+            return {"titre": (piste.get("title") or "").strip(), "artiste": (piste.get("subtitle") or "").strip(),
+                    "album": album, "annee": annee, "jaquette": jaquette, "lien": piste.get("url") or ""}
+
+        def _clip_identifier_musique(self, win):
+            """Bouton « 🎵 Identifier la musique » : écoute plusieurs passages du
+            fichier (ou de l'audio du lien) et remplit les champs encore vides."""
+            source = (win.field_clip_source.get() or "").strip().strip('"')
+            if not source:
+                win.status_label.configure(
+                    text="⚠️ Choisis d'abord un fichier (📂) ou colle un lien de clip.", text_color="#ff8888")
+                return
+            try:
+                win.clip_identifier_btn.configure(state="disabled", text="⏳ Identification en cours…")
+            except Exception:
+                pass
+
+            def maj(texte, couleur="#cccccc"):
+                def _f():
+                    try:
+                        if win.winfo_exists():
+                            win.status_label.configure(text=texte, text_color=couleur)
+                    except Exception:
+                        pass
+                self.after(0, _f)
+
+            def fin(res=None, info="", erreur=None):
+                def _f():
+                    try:
+                        if not win.winfo_exists():
+                            return
+                        win.clip_identifier_btn.configure(
+                            state="normal", text="🎵 Identifier la musique (écoute de plusieurs passages)")
+                        if erreur:
+                            win.status_label.configure(text=f"❌ {erreur}", text_color="#ff8888")
+                            return
+                        avant = self._completer_tableur_lire_champs(win)
+                        self._completer_tableur_on_resultat(win, avant, res or {}, None, info_etape=info)
+                    except Exception as ex:
+                        print(f"[Clip] affichage du résultat : {type(ex).__name__}: {ex}")
+                self.after(0, _f)
+
+            def worker():
+                import asyncio
+                self._trace_tampon = []
+                a_supprimer = []
+                try:
+                    est_url = source.lower().startswith(("http://", "https://"))
+                    indices = {}
+                    if est_url:
+                        maj("⏳ Téléchargement de l'audio du lien…")
+                        chemin_audio, indices = self._clip_telecharger_audio(source)
+                        a_supprimer.append(chemin_audio)
+                    else:
+                        if not os.path.isfile(source):
+                            raise RuntimeError(f"Fichier introuvable : {source}")
+                        chemin_audio = source
+                    self._clip_assurer_shazamio(maj)
+                    duree = self._clip_duree(chemin_audio)
+                    decalages = self._clip_decalages(duree)
+                    ident, decalage = None, 0
+                    for i, dec in enumerate(decalages, 1):
+                        mm, ss = divmod(int(dec), 60)
+                        maj(f"🎧 Écoute du passage {i}/{len(decalages)} (à {mm}:{ss:02d})…")
+                        extrait = self._clip_extraire_audio(chemin_audio, dec)
+                        try:
+                            try:
+                                sortie = asyncio.run(self._clip_shazam_async(extrait))
+                            except ImportError:
+                                raise RuntimeError(
+                                    "Le paquet 'shazamio' n'est pas installé : ouvre une invite de commandes "
+                                    "et tape  pip install shazamio  puis relance Citron.")
+                            ident = self._clip_shazam_lire(sortie)
+                        finally:
+                            try:
+                                os.remove(extrait)
+                            except Exception:
+                                pass
+                        self._trace_recherche(f"Shazam : passage {i}/{len(decalages)} ({dec}s) → "
+                                              f"{(ident or {}).get('artiste', '')} — {(ident or {}).get('titre', 'rien')}")
+                        if ident:
+                            decalage = dec
+                            break
+                    # Le clip lui-même : lien, ou fichier local s'il s'agit bien d'une vidéo.
+                    ext = os.path.splitext(source)[1].lower()
+                    video = est_url or ext in (".mp4", ".mkv", ".avi", ".mov", ".webm", ".ts", ".mts",
+                                                 ".m2ts", ".wmv", ".flv", ".mpg", ".mpeg")
+                    if ident:
+                        res = {"titre": ident["titre"], "annee": ident["annee"], "type": ident["album"],
+                               "affiche": ident["jaquette"], "source": "Shazam"}
+                        if video:
+                            res["bande_annonce"] = source
+                        self._musique_attribuer(res, ident["artiste"])
+                        mm, ss = divmod(int(decalage), 60)
+                        info = (f"🎵 Shazam a reconnu « {ident['titre']} » — {ident['artiste']}"
+                                + (f" (album : {ident['album']})" if ident["album"] else "")
+                                + f", au passage de {mm}:{ss:02d}."
+                                "\nClique maintenant sur « Rechercher » pour compléter le reste "
+                                "(photo, version remastérisée, durée…).")
+                        fin(res, info)
+                        return
+                    # Rien reconnu : indices de la plateforme, puis du nom du fichier / de la vidéo.
+                    artiste, piste = indices.get("artiste", ""), indices.get("piste", "")
+                    origine = "d'après les données de la plateforme"
+                    if not (artiste and piste):
+                        artiste, piste = self._clip_deviner_depuis_nom(
+                            indices.get("titre_video") or source, est_chemin=not indices.get("titre_video"))
+                        origine = "d'après le titre de la vidéo / du fichier"
+                    if artiste and piste:
+                        res = {"titre": piste, "annee": indices.get("annee", ""), "type": indices.get("album", ""),
+                               "source": "indice (non vérifié)"}
+                        if video:
+                            res["bande_annonce"] = source
+                        self._musique_attribuer(res, artiste)
+                        fin(res, f"⚠️ Shazam n'a rien reconnu ({len(decalages)} passages). Indice {origine} : "
+                                 f"« {piste} » — {artiste}. À VÉRIFIER, puis « Rechercher ».")
+                        return
+                    fin({"bande_annonce": source} if video else {},
+                        f"❌ Aucun des {len(decalages)} passages n'a été reconnu : le son est peut-être couvert "
+                        "par des dialogues ou des bruitages (clip « mini-film »), ou la chanson est trop rare. "
+                        "Essaie la bande son seule, ou saisis le titre et l'artiste à la main puis « Rechercher ».")
+                except Exception as ex:
+                    self._trace_recherche(f"Identification : ÉCHEC — {type(ex).__name__}: {ex}")
+                    fin(erreur=f"{type(ex).__name__}: {ex}")
+                finally:
+                    for p in a_supprimer:
+                        try:
+                            os.remove(p)
+                        except Exception:
+                            pass
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        # ── « Demander à Brave » : questions propres au clip ───────
+        def _demander_brave_questions_clip(self, titre, annee, champs_actuels):
+            """[(champ, nom_du_champ, question)] des champs encore vides d'un clip."""
+            groupe = (champs_actuels.get("realisateur") or "").strip()
+            artiste = self._musique_artiste_principal(champs_actuels)
+            de = f" de {artiste}" if artiste else ""
+            chanson = f"la chanson « {titre} »{de}"
+            q = []
+            if not champs_actuels.get("annee"):
+                q.append(("annee", "Année", f"En quelle année est sorti le clip vidéo de {chanson} ?"))
+            if not groupe and not champs_actuels.get("personnes"):
+                q.append(("realisateur", "Groupe",
+                          f"Quel groupe interprète la chanson « {titre} » ? (réponds « aucun » s'il s'agit d'un artiste solo)"))
+            if not champs_actuels.get("personnes"):
+                qui = (f"du groupe {groupe}" if groupe else f"de la chanson « {titre} »")
+                q.append(("personnes", "Chanteur et membres",
+                          f"Qui est le chanteur (ou la chanteuse) {qui} et quels sont les membres du groupe ? "
+                          "Réponds uniquement par une liste, un nom par ligne."))
+            if not champs_actuels.get("type"):
+                q.append(("type", "Album", f"Sur quel album figure {chanson} ?"))
+            if not champs_actuels.get("duree"):
+                q.append(("duree", "Durée", f"Quelle est la durée de {chanson} en minutes ?"))
+            if not champs_actuels.get("resume"):
+                q.append(("resume", "Anecdote(s)",
+                          f"Raconte en quelques phrases l'histoire de {chanson} et une ou plusieurs anecdotes "
+                          "sur la chanson ou son clip vidéo (écriture, enregistrement, tournage, succès). "
+                          "Réponds en français."))
+            if not champs_actuels.get("renseignements"):
+                q.append(("renseignements", "Renseignements divers (reprise, duo…)",
+                          f"{chanson[0].upper() + chanson[1:]} est-elle une reprise (cover) d'une autre chanson ? "
+                          "Réponds en une phrase courte : « Chanson originale » ou « Reprise de (artiste d'origine, année) », "
+                          "en ajoutant s'il s'agit d'un duo, d'un remix ou d'une bande originale de film."))
+            if not champs_actuels.get("affiche"):
+                q.append(("affiche", "Jaquette de l'album (URL image)",
+                          f"Quelle est la pochette de l'album sur lequel figure {chanson} ?"))
+            if not champs_actuels.get("photo") and artiste:
+                q.append(("photo", "Photo emblématique (URL image)",
+                          f"Quelle est une photo emblématique de {artiste} ?"))
+            if not champs_actuels.get("bande_annonce"):
+                q.append(("bande_annonce", "Clip vidéo (URL vidéo)",
+                          f"Quel est le lien YouTube du clip officiel de {chanson} ?"))
+            if not champs_actuels.get("remaster"):
+                q.append(("remaster", "Version remastérisée (URL vidéo)",
+                          f"Existe-t-il une version remastérisée du clip officiel de {chanson} ? Donne son lien YouTube."))
+            return q
+
+        def _clip_brave_liste_noms(self, t):
+            """Liste de noms (un par ligne, ou dans une phrase) -> « A / B / C »."""
+            import re
+            noms = []
+            for l in (t or "").splitlines():
+                l = re.sub(r"^\s*(?:[-•*]|\d+[.)])\s*", "", l).strip()
+                if not l or l.endswith(":"):
+                    continue
+                m = re.match(r"^(.{2,50}?)\s*(?:[:–—]\s+.*|\(.*)?$", l)
+                nom = re.sub(r"\([^)]*\)", "", (m.group(1) if m else l)).strip(" .,;*«»\"")
+                if 2 <= len(nom) <= 40 and len(nom.split()) <= 4 and not re.search(r"\d", nom):
+                    noms.append(nom)
+            if not noms:
+                m = re.search(r"(?:\best\b|\bsont\b|:)\s+(.+?)\.?\s*$", " ".join((t or "").split()))
+                if m:
+                    morceau = re.sub(r"(?i)accompagn[ée]e?s?\s+(?:de|par)", ",", m.group(1))
+                    for x in re.split(r"\s*(?:,|;|&|\bet\b)\s*", morceau):
+                        x = re.sub(r"\([^)]*\)", "", x).strip(" .,;*«»\"")
+                        if 2 <= len(x) <= 40 and len(x.split()) <= 4 and not re.search(r"\d", x):
+                            noms.append(x)
+            vus, sortie = set(), []
+            for x in noms:
+                if x.casefold() not in vus:
+                    vus.add(x.casefold())
+                    sortie.append(x)
+            return " / ".join(sortie[:12])
+
+        def _clip_brave_infos(self, t):
+            """« Renseignements divers » d'un clip : une ou deux phrases courtes (reprise, duo…)."""
+            import re
+            t = re.sub(r"\*\*|__", "", t or "").strip()
+            lignes = [l.strip(" -•*") for l in t.splitlines() if l.strip()]
+            lignes = [l for l in lignes if not (l.endswith(":") and len(l) < 80)]
+            texte = " ".join(lignes[:3]).strip()
+            if len(texte) < 4:
+                return ""
+            m = re.match(r"(.{1,300}?[.!?])(?:\s|$)", texte)
+            return (m.group(1) if m else texte[:300]).rstrip(" ,;")
+
+        def _clip_brave_nom(self, champ, t):
+            """Décode une réponse Brave : « realisateur » = nom du GROUPE, « personnes » = chanteur et
+            membres (« A / B / C »), « type » = album."""
+            import re
+            t = (t or "").replace("**", "").strip()
+            premiere = next((l.strip() for l in t.splitlines() if l.strip()), "")
+            if champ == "personnes":
+                return self._clip_brave_liste_noms(t)
+            if champ == "realisateur":
+                if re.search(r"(?i)\b(aucun|pas de groupe|artiste solo|solo)\b", premiere[:120]):
+                    return ""
+                motifs = [r"(?:interpr[ée]t[ée]e?|chant[ée]e?|jou[ée]e?)\s+par\s+(?:le\s+groupe\s+)?([^.;()]+)",
+                          r"(?:du\s+|le\s+)?groupe\s+([^.;(),]+)"]
+            else:
+                motifs = [r"album\s+[«\"“]\s*([^»\"”]+?)\s*[»\"”]",
+                          r"(?:figure|appara[iî]t|extrait|tir[ée]e?)\s+(?:sur|de)\s+l['’]album\s+[«\"“]?\s*([^»\"”.;(]+)"]
+            return self._leo_parse_nom_court(t, motifs).strip(" «»\"“”*")
+
         def _rechercher_bande_annonce_dans_resultat(self, resultat, titre_ba, annee_ba, libelle="du film"):
             """Recherche de la bande-annonce (inchangée : YouTube, puis
             repli sur Dailymotion) et stockage dans resultat["bande_annonce"].
@@ -11585,6 +12944,14 @@ try:
                                         {"nom": "Planète Jeunesse", "url": "https://www.planete-jeunesse.com/"}, t, a),
                                     "cfg": None, "url": "https://www.planete-jeunesse.com/"},
             }
+            reg.update({
+                "deezer": {"nom": "Deezer (musique)", "fn": self._rechercher_deezer, "cfg": None,
+                           "url": "https://www.deezer.com/"},
+                "itunes": {"nom": "Apple Music / iTunes", "fn": self._rechercher_itunes, "cfg": None,
+                           "url": "https://music.apple.com/"},
+                "musicbrainz": {"nom": "MusicBrainz + Cover Art Archive", "fn": self._rechercher_musicbrainz,
+                                "cfg": None, "url": "https://musicbrainz.org/"},
+            })
             for c in (getattr(self, "_search_sites_custom", None) or []):
                 try:
                     reg[c["id"]] = {"nom": c["nom"], "cfg": None, "url": c["url"],
@@ -11597,6 +12964,9 @@ try:
             """Ordre par défaut d'une catégorie : TMDB d'abord, puis les
             sites spécialisés (théâtre) ou les sources « film » (toutes les
             autres cases, comme avant)."""
+            if categorie == "Clip vidéo":
+                # Sources musicales (aucune clé API), puis Ask Brave pour ce qui manque.
+                return ["deezer", "itunes", "musicbrainz", "askbrave"]
             if categorie == "Pièce de théâtre":
                 return ["tmdb", "tpa", "lads", "senscritique_theatre", "theatreonline", "offi"]
             if categorie == "Films d'animation":
@@ -11617,6 +12987,9 @@ try:
                     ["tmdb", "tvprog", "allocine", "senscritique", "plansamericains", "ia"],
                     ["wikidoublage", "tmdb", "allocine", "tvprog", "senscritique", "plansamericains", "ia"],
                     ["wikidoublage", "leo", "tmdb", "allocine", "tvprog", "senscritique", "plansamericains", "ia"]):
+                ids = None
+            if categorie == "Clip vidéo" and ids == ["tmdb", "tvprog", "allocine", "senscritique",
+                                                       "plansamericains", "ia"]:
                 ids = None
             if not isinstance(ids, list):
                 ids = self._sites_recherche_defaut(categorie)
@@ -11676,7 +13049,15 @@ try:
                 win._recherche_titre_ref = ref
 
             animation = (cat == "Films d'animation")
-            if theatre:
+            clip = (cat == "Clip vidéo")
+            if clip:
+                # Chanteur + membres du groupe (personnes, 4ème colonne, comme des acteurs), groupe
+                # (realisateur), album (type), jaquette (affiche), photo emblématique, anecdotes
+                # (resume), reprise/duo (renseignements) ; le clip et la version remastérisée sont
+                # cherchés à part.
+                champs_a_completer = ("annee", "resume", "personnes", "realisateur", "type", "duree",
+                                      "affiche", "photo", "renseignements")
+            elif theatre:
                 champs_a_completer = ("annee", "resume", "personnes", "realisateur", "affiche")
             elif animation:
                 # « Renseignements divers » = studio d'animation (Wiki Doublage).
@@ -11685,20 +13066,32 @@ try:
             else:
                 champs_a_completer = ("annee", "resume", "personnes", "realisateur",
                                       "type", "duree", "affiche")
-            noms_champs = {"annee": "Année", "resume": "Résumé / synopsis",
-                           "personnes": ("Comédiens" if theatre else
+            noms_champs = {"annee": "Année", "resume": ("Anecdote(s)" if clip else "Résumé / synopsis"),
+                           "personnes": ("Chanteur et membres" if clip else "Comédiens" if theatre else
                                          "Voix française" if animation else "Acteurs"),
-                           "realisateur": "Mise en scène" if theatre else "Réalisateur",
-                           "type": "Type", "duree": "Durée", "affiche": "Affiche",
+                           "realisateur": ("Groupe" if clip else "Mise en scène" if theatre else "Réalisateur"),
+                           "type": "Album" if clip else "Type", "duree": "Durée",
+                           "affiche": "Jaquette" if clip else "Affiche",
                            "renseignements": "Renseignements divers",
-                           "bande_annonce": "Bande-annonce"}
+                           "bande_annonce": "Clip vidéo" if clip else "Bande-annonce",
+                           "photo": "Photo emblématique", "remaster": "Version remastérisée"}
             manquants = [c for c in champs_a_completer if not champs_actuels.get(c)]
+            if clip and champs_actuels.get("personnes"):
+                # Un artiste solo n'a pas de groupe : « Groupe » n'est plus réclamé dès que
+                # « Chanteur et membres » est renseigné.
+                manquants = [c for c in manquants if c != "realisateur"]
             ba_vide = not champs_actuels.get("bande_annonce")
+            # Version remastérisée : cherchée une seule fois par titre (elle n'existe pas toujours).
+            remaster_vide = bool(clip and not champs_actuels.get("remaster")
+                                 and getattr(win, "_remaster_cherche", "") != f"{titre.casefold()}|{cat}")
             # Transmis aux sources qui posent une question par champ (Léo).
             self._recherche_manquants = list(manquants)
             self._recherche_categorie_courante = cat
+            # Champs actuels du formulaire : les sources musicales y lisent le groupe /
+            # chanteur déjà saisi pour départager les titres homonymes.
+            self._recherche_champs_actuels = dict(champs_actuels)
 
-            if not manquants and not ba_vide:
+            if not manquants and not ba_vide and not remaster_vide:
                 win.status_label.configure(
                     text="ℹ️ Tous les champs sont déjà renseignés : rien à rechercher. "
                          "Efface un champ pour le faire rechercher à nouveau.",
@@ -11775,7 +13168,12 @@ try:
                 if d:
                     lien = d.get("source", "")
                     resultat["source"] = f"{nom} ({lien})" if lien else nom
-                if ba_vide and not (resultat.get("bande_annonce") or "").strip():
+                if clip:
+                    # Clip officiel + version remastérisée (YouTube), avec l'artiste trouvé par la source.
+                    self._clip_completer_videos(resultat, champs_actuels, titre, annee_cible,
+                                                ba_vide, remaster_vide)
+                    win._remaster_cherche = ref
+                if ba_vide and not clip and not (resultat.get("bande_annonce") or "").strip():
                     titre_ba = titre if theatre else (resultat.get("titre") or titre)
                     annee_ba = resultat.get("annee") or annee_cible
                     self._rechercher_bande_annonce_dans_resultat(
@@ -11803,6 +13201,8 @@ try:
                         info += "\n" + info_multi
                     if ba_vide and not (resultat.get("bande_annonce") or "").strip():
                         restants.append(noms_champs["bande_annonce"])
+                    if remaster_vide and not (resultat.get("remaster") or "").strip():
+                        restants.append(noms_champs["remaster"])
                     if restants:
                         info += "\nChamps encore vides : " + ", ".join(restants) + "."
                 else:
@@ -11998,14 +13398,13 @@ try:
             rafraichir()
 
         def _format_image_autorise(self, url_image):
-            """Interdit le format webp pour les affiches (jpg/jpeg
-            privilégiés) — Citron doit rester utilisable de façon la plus
-            autonome possible, sans dépendre d'un décodeur webp
-            supplémentaire. Renvoie False pour une URL vide ou en .webp."""
-            u = (url_image or "").strip().lower().split("?")[0]
-            if not u:
-                return False
-            return not u.endswith(".webp")
+            """Accepte toute URL d'image non vide. Les images webp ne sont
+            plus refusées : elles sont converties automatiquement en JPG au
+            téléchargement (voir _convertir_webp_en_jpg_octets). Les jpg/jpeg
+            restent privilégiés dans l'ordre de recherche des sources.
+            Renvoie False pour une URL vide."""
+            u = (url_image or "").strip()
+            return bool(u)
 
         def _normaliser_url_affiche(self, url_image):
             """Améliore une URL d'affiche AlloCiné collée à la main,
@@ -12075,6 +13474,81 @@ try:
                 return affiche
             return self._normaliser_url_affiche(url)
 
+        def _convertir_webp_en_jpg_octets(self, data, qualite=95):
+            """Convertit des octets d'image WEBP en JPG (qualité 95, fond blanc
+            si l'image est transparente). Le WEBP est reconnu à sa signature
+            (RIFF....WEBP), pas à l'extension ni au Content-Type, donc même
+            un webp servi sous une adresse en .jpg est détecté.
+            - Si `data` n'est pas du webp : renvoyé tel quel (même objet).
+            - Si c'est du webp : renvoie les octets JPG (nouvel objet), via
+              Pillow ou, à défaut, via ffmpeg.
+            - Si la conversion échoue : renvoie None (le détail est tracé)."""
+            if not data or not (data[:4] == b"RIFF" and data[8:12] == b"WEBP"):
+                return data
+            # --- Méthode 1 : Pillow ---
+            try:
+                from PIL import Image
+                with Image.open(io.BytesIO(data)) as img:
+                    if img.mode in ("RGBA", "LA", "P"):
+                        img = img.convert("RGBA")
+                        fond = Image.new("RGB", img.size, (255, 255, 255))
+                        fond.paste(img, mask=img.split()[-1])
+                        img = fond
+                    else:
+                        img = img.convert("RGB")
+                    sortie = io.BytesIO()
+                    img.save(sortie, "JPEG", quality=qualite, optimize=True)
+                self._trace_recherche("Affiche : webp converti en JPG (Pillow).")
+                return sortie.getvalue()
+            except Exception as ex:
+                self._trace_recherche(
+                    f"Affiche : conversion webp→JPG par Pillow impossible "
+                    f"({type(ex).__name__}: {ex}) — essai avec ffmpeg.")
+            # --- Méthode 2 : ffmpeg (secours) ---
+            try:
+                ffmpeg = self._get_ffmpeg_path()
+                if not ffmpeg:
+                    self._trace_recherche("Affiche : ffmpeg introuvable, conversion webp→JPG impossible.")
+                    return None
+                fd_in, chemin_in = tempfile.mkstemp(suffix=".webp", prefix="citron_webp_")
+                fd_out, chemin_out = tempfile.mkstemp(suffix=".jpg", prefix="citron_webp_")
+                os.close(fd_out)
+                try:
+                    with os.fdopen(fd_in, "wb") as f:
+                        f.write(data)
+                    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                    subprocess.run([ffmpeg, "-y", "-i", chemin_in, "-q:v", "2", chemin_out],
+                                   check=True, capture_output=True, creationflags=flags)
+                    with open(chemin_out, "rb") as f:
+                        jpg = f.read()
+                finally:
+                    for c in (chemin_in, chemin_out):
+                        try:
+                            os.remove(c)
+                        except OSError:
+                            pass
+                if jpg:
+                    self._trace_recherche("Affiche : webp converti en JPG (ffmpeg).")
+                    return jpg
+            except Exception as ex:
+                self._trace_recherche(
+                    f"Affiche : conversion webp→JPG par ffmpeg impossible "
+                    f"({type(ex).__name__}: {ex}).")
+            return None
+
+        def _extension_image_selon_octets(self, data, defaut=".jpg"):
+            """Extension réelle d'une image d'après sa signature (JPG, PNG, GIF),
+            pour que le fichier enregistré porte la bonne extension même si
+            l'URL disait autre chose (ex. URL en .png mais contenu webp
+            converti en JPG)."""
+            if data[:3] == b"\xff\xd8\xff":
+                return ".jpg"
+            if data[:8] == b"\x89PNG\r\n\x1a\n":
+                return ".png"
+            if data[:6] in (b"GIF87a", b"GIF89a"):
+                return ".gif"
+            return defaut
+
         def _telecharger_bytes_image(self, url):
             """Télécharge le contenu binaire d'une image, avec un en-tête
             Referer (certains CDN — dont celui d'AlloCiné, acsta.net —
@@ -12094,10 +13568,15 @@ try:
             try:
                 req = urllib.request.Request(url, headers=headers)
                 with urllib.request.urlopen(req, timeout=15) as r:
-                    if "webp" in (r.headers.get("Content-Type", "") or "").lower():
-                        self._trace_recherche(f"Affiche : refusée, le serveur a renvoyé du webp → {url}")
-                        return None
-                    return r.read()
+                    data = r.read()
+                # Image WEBP (détectée à sa signature) : convertie en JPG ;
+                # si la conversion échoue, l'affiche est abandonnée (None)
+                # plutôt que d'enregistrer un format que Citron ne gère pas.
+                data_jpg = self._convertir_webp_en_jpg_octets(data)
+                if data_jpg is None:
+                    self._trace_recherche(f"Affiche : webp reçu mais conversion en JPG impossible → {url}")
+                    return None
+                return data_jpg
             except Exception as ex:
                 self._trace_recherche(f"Affiche : échec du téléchargement de {url} — {type(ex).__name__}: {ex}")
                 return None
@@ -13114,7 +14593,7 @@ try:
                     candidates = [html_mod.unescape(m.group(1)).strip()]
             for img_url in candidates:
                 if not self._format_image_autorise(img_url):
-                    self._trace_recherche(f"AlloCiné : image webp ignorée → {img_url}")
+                    self._trace_recherche(f"AlloCiné : adresse d'image vide ignorée → {img_url}")
                     continue
                 final = img_url
                 try:
@@ -13125,8 +14604,7 @@ try:
                     with urllib.request.urlopen(req, timeout=15) as r:
                         final = r.geturl() or img_url
                         if "webp" in (r.headers.get("Content-Type", "") or "").lower():
-                            self._trace_recherche(f"AlloCiné : le serveur renvoie du webp, ignoré → {final}")
-                            continue
+                            self._trace_recherche(f"AlloCiné : le serveur renvoie du webp, converti en JPG au téléchargement → {final}")
                 except Exception as ex:
                     self._trace_recherche(
                         f"AlloCiné : ouverture de l'image impossible ({type(ex).__name__}: {ex}), "
@@ -13591,6 +15069,8 @@ try:
 
         def _demander_brave_questions(self, titre, annee, cat, champs_actuels):
             """[(champ, nom_du_champ, question)] des champs encore vides."""
+            if cat == "Clip vidéo":
+                return self._demander_brave_questions_clip(titre, annee, champs_actuels)
             anim = (cat == "Films d'animation")
             theatre = (cat == "Pièce de théâtre")
             objet = "la pièce de théâtre" if theatre else ("le film d'animation" if anim else "le film")
@@ -13639,7 +15119,9 @@ try:
             if not t or re.search(r"(?i)\b(je n'ai pas (?:trouvé|pu trouver)|je ne trouve pas|je ne dispose pas|"
                                   r"aucune information|pas d'information)\b", t[:250]):
                 return ""
-            if champ in ("affiche", "bande_annonce"):
+            # « Clip vidéo » : version remastérisée = lien vidéo, photo = lien d'image.
+            champ_lien = {"remaster": "bande_annonce", "photo": "affiche"}.get(champ, champ)
+            if champ_lien in ("affiche", "bande_annonce"):
                 # Liens de la réponse (texte brut ou lien Markdown [texte](url)).
                 liens = []
                 for u in re.findall(r"https?://[^\s<>\"'\)\]]+", texte or ""):
@@ -13648,7 +15130,7 @@ try:
                         liens.append(u)
                 # Liens d'image « proxy » de Brave : l'adresse d'origine est encodée dedans.
                 liens = [self._brave_decoder_image(u) for u in liens]
-                if champ == "bande_annonce":
+                if champ_lien == "bande_annonce":
                     for u in liens:
                         if re.search(r"(?i)(youtube\.com/watch|youtu\.be/|youtube\.com/embed/|"
                                      r"dailymotion\.com/video|dai\.ly/)", u):
@@ -13685,6 +15167,10 @@ try:
                     if re.search(r"(?i)allocine\.fr/film/fichefilm", u):
                         return u
                 return ""
+            if cat == "Clip vidéo" and champ in ("personnes", "realisateur", "type"):
+                return self._clip_brave_nom(champ, t)
+            if cat == "Clip vidéo" and champ == "renseignements":
+                return self._clip_brave_infos(t)
             if champ == "annee":
                 m = re.search(r"\b(19\d{2}|20\d{2})\b", t)
                 return m.group(1) if m else ""
@@ -13862,7 +15348,7 @@ try:
                 valeur = self._demander_brave_interpreter(champ, texte, cat)
                 self._trace_recherche(f"Demander à Brave : champ « {nom_champ} », réponse collée "
                                       f"{texte[:300]!r} → {valeur[:200]!r}")
-                if not valeur and champ == "bande_annonce" and avant.get("titre"):
+                if not valeur and champ in ("bande_annonce", "remaster") and avant.get("titre"):
                     # Pas de vidéo exploitable dans la réponse de Brave : recherche habituelle de
                     # Citron (YouTube puis Dailymotion) à partir du titre et de l'année du formulaire.
                     libelle = ("de la pièce de théâtre" if cat == "Pièce de théâtre"
@@ -13871,9 +15357,13 @@ try:
                                          text_color="#cccccc")
                     lbl_statut.update_idletasks()
                     res_ba = {}
-                    self._rechercher_bande_annonce_dans_resultat(
-                        res_ba, avant["titre"], avant.get("annee") or None, libelle)
-                    valeur = res_ba.get("bande_annonce") or ""
+                    if cat == "Clip vidéo":
+                        _art = self._musique_artiste_principal(avant)
+                        valeur = self._clip_chercher_video(avant["titre"], _art, champ == "remaster")
+                    else:
+                        self._rechercher_bande_annonce_dans_resultat(
+                            res_ba, avant["titre"], avant.get("annee") or None, libelle)
+                        valeur = res_ba.get("bande_annonce") or ""
                     self._trace_recherche(f"Demander à Brave : repli recherche bande-annonce → {valeur!r}")
                 if not valeur:
                     lbl_statut.configure(
@@ -14199,11 +15689,28 @@ try:
                 # Rempli seulement par les sources qui le fournissent (Wiki Doublage :
                 # studio d'animation) et seulement si le champ était vide.
                 champ_widget["renseignements"] = win.field_renseignements
+            for _cle_c, _attr_c in (("remaster", "field_remaster"), ("photo", "field_photo")):
+                if hasattr(win, _attr_c):
+                    champ_widget[_cle_c] = getattr(win, _attr_c)
             completes = []
             for cle, widget in champ_widget.items():
                 if not champs_avant.get(cle) and (resultat.get(cle) or "").strip():
                     widget.set(resultat[cle].strip())
                     completes.append(cle)
+            # Clip vidéo : une version remastérisée trouvée devient LE clip retenu (champ « Clip
+            # vidéo », donc colonne du clip du tableur). Le clip d'origine est gardé de côté et ne
+            # sert que de secours si le téléchargement de la version remastérisée échoue.
+            if (not champs_avant.get("remaster") and (resultat.get("remaster") or "").strip()
+                    and self._completer_tableur_est_clip(win)):
+                rem = resultat["remaster"].strip()
+                actuel = (win.field_bande_annonce.get() or "").strip()
+                if actuel and actuel != rem:
+                    win._clip_origine = actuel
+                win.field_bande_annonce.set(rem)
+                if "bande_annonce" not in completes:
+                    completes.append("bande_annonce")
+                suffixe_etape += ("\n🎞 La version remastérisée est retenue comme clip"
+                                  + (" (le clip d'origine reste en secours)." if actuel and actuel != rem else "."))
             if not champs_avant.get("resume") and (resultat.get("resume") or "").strip():
                 win.field_resume.delete("1.0", "end")
                 win.field_resume.insert("1.0", resultat["resume"].strip())
@@ -14234,6 +15741,10 @@ try:
                 "affiche": self._normaliser_url_affiche((win.field_affiche.get() or "").strip()),
                 "categorie": (win.field_categorie.get() or "").strip() if hasattr(win, "field_categorie") else "",
                 "renseignements": (win.field_renseignements.get() or "").strip() if hasattr(win, "field_renseignements") else "",
+                # Catégorie « Clip vidéo » (champs vides/ignorés pour les autres catégories)
+                "remaster": (win.field_remaster.get() or "").strip() if hasattr(win, "field_remaster") else "",
+                "photo": self._normaliser_url_affiche((win.field_photo.get() or "").strip()) if hasattr(win, "field_photo") else "",
+                "clip_source": (win.field_clip_source.get() or "").strip() if hasattr(win, "field_clip_source") else "",
             }
 
         def _telecharger_image_temporaire(self, url_image):
@@ -14263,13 +15774,36 @@ try:
                 data = self._telecharger_bytes_image(url_image)
             if data is None:
                 return ""
+            ext = self._extension_image_selon_octets(data, ext)
             fd, dest = tempfile.mkstemp(suffix=ext, prefix="citron_affiche_")
             with os.fdopen(fd, "wb") as f:
                 f.write(data)
             return dest
 
 
-        def _telecharger_affiche_choisie(self, titre, annee, url_image, dossier, chemin_local_existant=""):
+        def _nom_fichier_titre_annee(self, titre, annee, defaut="fichier", suffixe=""):
+            """Nom de fichier (sans extension) au format « Titre (année) », comme le reste
+            du tableur : « La haine (1995) ». Les caractères interdits dans un nom de
+            fichier Windows sont retirés (« : » devient « - »), sans toucher aux accents,
+            apostrophes, virgules, etc. Sans année, on garde seulement le titre."""
+            import re
+            t = str(titre or "").strip()
+            t = re.sub(r"\s*:\s*", " - ", t)
+            t = re.sub(r"[\\/]+", "-", t)
+            t = re.sub(r'[<>"|?*\x00-\x1f]', "", t)
+            t = re.sub(r"\s+", " ", t).strip(" .")
+            a = re.sub(r"\D", "", str(annee or ""))[:4]
+            nom = f"{t} ({a})" if (t and a) else (t or defaut)
+            # Catégorie « Clip vidéo » : « Chanson (année) Artiste » (suffixe = chanteur ou groupe).
+            sfx = re.sub(r"\s*:\s*", " - ", str(suffixe or "").strip())
+            sfx = re.sub(r"[\\/]+", "-", sfx)
+            sfx = re.sub(r'[<>"|?*\x00-\x1f]', "", sfx)
+            sfx = re.sub(r"\s+", " ", sfx).strip(" .")
+            if sfx:
+                nom = f"{nom} {sfx}"
+            return nom[:150].strip(" .") or defaut
+
+        def _telecharger_affiche_choisie(self, titre, annee, url_image, dossier, chemin_local_existant="", suffixe=""):
             """Télécharge l'affiche dans le dossier choisi par l'utilisateur
             (demandé systématiquement, voir _completer_tableur_valider).
             Accepte aussi bien une URL d'image directe qu'un lien de fiche
@@ -14290,7 +15824,7 @@ try:
                 return "", f"Impossible de créer le dossier de l'affiche :\n{ex}"
             if chemin_local_existant and os.path.isfile(chemin_local_existant):
                 ext = os.path.splitext(chemin_local_existant)[1].lower() or ".jpg"
-                nom = re.sub(r"[^A-Za-z0-9_-]+", "_", f"{titre}_{annee}").strip("_") or "affiche"
+                nom = self._nom_fichier_titre_annee(titre, annee, "affiche", suffixe)
                 dest = os.path.join(dossier, nom + ext)
                 try:
                     shutil.copyfile(chemin_local_existant, dest)
@@ -14304,12 +15838,12 @@ try:
                         f"({type(ex).__name__}: {ex}) — nouveau téléchargement.")
             url_reelle = self._resoudre_url_affiche(url_image) or url_image
             if not self._format_image_autorise(url_reelle):
-                return "", "Affiche refusée : format webp non autorisé (jpg/jpeg uniquement)."
+                return "", "Affiche : adresse d'image vide."
             ext = ".jpg"
             m = re.search(r"\.(jpg|jpeg|png)(?:\?|$)", url_reelle, re.IGNORECASE)
             if m:
                 ext = "." + m.group(1).lower()
-            nom = re.sub(r"[^A-Za-z0-9_-]+", "_", f"{titre}_{annee}").strip("_") or "affiche"
+            nom = self._nom_fichier_titre_annee(titre, annee, "affiche", suffixe)
             dest = os.path.join(dossier, nom + ext)
             data = self._telecharger_bytes_image(url_reelle)
             if data is None and url_reelle != url_image:
@@ -14322,6 +15856,8 @@ try:
             if data is None:
                 return "", ("Échec du téléchargement de l'affiche (voir la console, "
                              "préfixe [Compléter], pour le détail).")
+            # Extension réelle d'après le contenu (un webp a été converti en JPG)
+            dest = os.path.join(dossier, nom + self._extension_image_selon_octets(data, ext))
             try:
                 with open(dest, "wb") as f:
                     f.write(data)
@@ -14352,7 +15888,7 @@ try:
                 opts["ffmpeg_location"] = ffmpeg_path
             return opts
 
-        def _telecharger_bande_annonce_video(self, titre, annee, url_youtube, dossier, chemin_local_existant=""):
+        def _telecharger_bande_annonce_video(self, titre, annee, url_youtube, dossier, chemin_local_existant="", suffixe=""):
             """Télécharge réellement la vidéo de la bande-annonce dans le
             dossier choisi par l'utilisateur (demandé systématiquement),
             pour que Citron puisse la lire lui-même sans dépendre d'un
@@ -14373,9 +15909,19 @@ try:
                 os.makedirs(dossier, exist_ok=True)
             except Exception as ex:
                 return "", f"Impossible de créer le dossier de la bande-annonce :\n{ex}"
+            if os.path.isfile(url_youtube):
+                # Clip déposé depuis le disque (catégorie « Clip vidéo ») : simple copie.
+                ext = os.path.splitext(url_youtube)[1] or ".mp4"
+                dest = os.path.join(dossier, self._nom_fichier_titre_annee(titre, annee, "clip", suffixe) + ext)
+                try:
+                    if os.path.normcase(os.path.abspath(url_youtube)) != os.path.normcase(os.path.abspath(dest)):
+                        shutil.copyfile(url_youtube, dest)
+                    return dest, ""
+                except Exception as ex:
+                    return "", f"Impossible de copier le clip :\n{ex}"
             if chemin_local_existant and os.path.isfile(chemin_local_existant):
                 ext = os.path.splitext(chemin_local_existant)[1] or ".mp4"
-                nom = re.sub(r"[^A-Za-z0-9_-]+", "_", f"{titre}_{annee}_bande_annonce").strip("_") or "bande_annonce"
+                nom = self._nom_fichier_titre_annee(titre, annee, "bande annonce", suffixe)
                 dest = os.path.join(dossier, nom + ext)
                 try:
                     shutil.copyfile(chemin_local_existant, dest)
@@ -14392,8 +15938,9 @@ try:
             except ImportError:
                 return "", ("Téléchargement de bande-annonce impossible : le paquet "
                              "'yt-dlp' n'est pas installé (pip install yt-dlp).")
-            nom = re.sub(r"[^A-Za-z0-9_-]+", "_", f"{titre}_{annee}_bande_annonce").strip("_") or "bande_annonce"
-            ydl_opts = self._options_yt_dlp_bande_annonce(os.path.join(dossier, nom + ".%(ext)s"))
+            nom = self._nom_fichier_titre_annee(titre, annee, "bande annonce", suffixe)
+            ydl_opts = self._options_yt_dlp_bande_annonce(
+                os.path.join(dossier.replace("%", "%%"), nom.replace("%", "%%") + ".%(ext)s"))
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url_youtube, download=True)
@@ -14422,6 +15969,8 @@ try:
             import re
             if not url_video:
                 return ""
+            if os.path.isfile(url_video):
+                return url_video  # clip local déposé : lu tel quel dans la simulation
             try:
                 import yt_dlp
             except ImportError:
@@ -14475,10 +16024,13 @@ try:
                     except Exception:
                         chemin_affiche = ""
                 chemin_bande_annonce = ""
-                if champs.get("bande_annonce"):
+                # Clip vidéo : la version remastérisée est prioritaire sur le clip d'origine.
+                _url_ba_sim = ((champs.get("remaster") if (champs.get("categorie") or "").strip().casefold() == "clip vidéo" else "")
+                               or champs.get("bande_annonce") or "")
+                if _url_ba_sim:
                     try:
                         chemin_bande_annonce = self._telecharger_bande_annonce_temporaire(
-                            champs["titre"], champs["annee"], champs["bande_annonce"])
+                            champs["titre"], champs["annee"], _url_ba_sim)
                     except Exception:
                         chemin_bande_annonce = ""
                 # Mémorise ces téléchargements temporaires sur la fenêtre :
@@ -14489,7 +16041,7 @@ try:
                 # _completer_tableur_valider.
                 win._sim_cache_affiche_url = champs.get("affiche") or ""
                 win._sim_cache_affiche_path = chemin_affiche or ""
-                win._sim_cache_ba_url = champs.get("bande_annonce") or ""
+                win._sim_cache_ba_url = _url_ba_sim
                 win._sim_cache_ba_path = chemin_bande_annonce or ""
                 if win.winfo_exists():
                     self.after(0, lambda: self._completer_tableur_ouvrir_simulation(
@@ -14511,7 +16063,9 @@ try:
             # lien source), juste pas dans cet aperçu.
             row_data = [
                 champs["titre"], champs["annee"], champs["resume"], champs["personnes"],
-                champs["type"], champs["realisateur"], champs["duree"], "",
+                champs["type"], champs["realisateur"], champs["duree"],
+                ((champs.get("renseignements") or "") + (" | " if champs.get("renseignements") and champs.get("remaster") else "")
+                 + (f"Version remastérisée : {champs['remaster']}" if champs.get("remaster") else "")),
                 "", chemin_affiche or "", chemin_bande_annonce or "", champs.get("categorie", ""),
             ]
             test_scope = [{
@@ -14543,8 +16097,8 @@ try:
             pour éviter un doublon (titre très proche mais pas identique),
             demande SYSTÉMATIQUEMENT où enregistrer l'affiche et où
             enregistrer la bande-annonce (deux emplacements distincts —
-            jamais mémorisés comme dossier fixe, pour laisser le choix à
-            chaque fois), télécharge les deux, puis intègre tout au tableur
+            mémorisés pour CHAQUE case à cocher, et modifiables à chaque
+            validation), télécharge les deux, puis intègre tout au tableur
             réel (met à jour la ligne existante si le titre y figure déjà,
             sinon ajoute une nouvelle ligne)."""
             champs = self._completer_tableur_lire_champs(win)
@@ -14565,16 +16119,48 @@ try:
             _titre_recherche = getattr(win, "_edition_titre_original", None) if _edition_mode else None
             _annee_recherche = getattr(win, "_edition_annee_original", None) if _edition_mode else None
 
+            # Chemins (tableur + dossier affiche + dossier bande-annonce)
+            # MÉMORISÉS PAR CASE À COCHER (Film, Pièce de théâtre, Films
+            # d'animation, Clip vidéo, Concert, Autre) : en changeant de case,
+            # on retrouve les chemins déjà utilisés pour cette catégorie.
+            # Une fenêtre récapitulative les affiche à chaque validation, avec
+            # un bouton « Changer… » pour chacun (donc toujours modifiables).
             # Résolu et vérifié ICI, sur le thread principal — jamais dans
             # le thread d'arrière-plan plus bas, où un messagebox/filedialog
             # Tkinter est peu fiable (peut rester invisible ou planter, ce
             # qui donnait l'impression que la validation ne faisait rien).
-            chemin_tableur = self._confirmer_ou_choisir_tableur()
-            if not chemin_tableur:
-                return
+            _est_clip = (champs.get("categorie") or "").strip().casefold() == "clip vidéo"
+            _cle_cat = self._completer_tableur_categorie_cle(win)
+            _veut_affiche = bool(champs.get("affiche") or champs.get("photo"))
+            _veut_ba = bool(champs.get("bande_annonce") or (_est_clip and champs.get("remaster")))
+
+            chemin_tableur = ""
+            if _edition_mode:
+                # Édition depuis « Infos (tableur) » : on reste sur le tableur
+                # d'où vient la ligne (comportement inchangé).
+                chemin_tableur = self._confirmer_ou_choisir_tableur()
+                if not chemin_tableur:
+                    return
+
+            dossier_affiche = ""
+            dossier_bande_annonce = ""
+            if (not _edition_mode) or _veut_affiche or _veut_ba:
+                choix = self._completer_tableur_dialogue_chemins(
+                    win, _cle_cat, _est_clip,
+                    avec_tableur=not _edition_mode,
+                    avec_affiche=_veut_affiche, avec_ba=_veut_ba)
+                if choix is None:
+                    self._trace_recherche(f"Validation « {champs['titre']} » — chemins annulés ({_cle_cat})")
+                    return
+                if not _edition_mode:
+                    chemin_tableur = choix.get("tableur", "")
+                    if not chemin_tableur:
+                        return
+                dossier_affiche = choix.get("affiche", "")
+                dossier_bande_annonce = choix.get("bande_annonce", "")
 
             if not _edition_mode:
-                proche = self._chercher_titre_proche_tableur(champs["titre"])
+                proche = self._chercher_titre_proche_tableur(champs["titre"], path=chemin_tableur)
                 if proche and not proche.get("exact"):
                     label = proche["titre"] + (f" ({proche['annee']})" if proche.get("annee") else "")
                     if not messagebox.askyesno(
@@ -14583,35 +16169,6 @@ try:
                         f"Veux-tu quand même ajouter « {champs['titre']} » comme nouvelle ligne ?"
                     ):
                         return
-
-            # L'emplacement de téléchargement est redemandé à chaque
-            # validation (jamais fixé automatiquement) — bande-annonce et
-            # affiche vont systématiquement dans des dossiers distincts.
-            dossier_affiche = ""
-            if champs.get("affiche"):
-                dossier_affiche = filedialog.askdirectory(
-                    title="Où enregistrer l'AFFICHE du film ?",
-                    initialdir=getattr(self, "_dernier_dossier_affiches", "") or None)
-                if dossier_affiche:
-                    self._dernier_dossier_affiches = dossier_affiche
-                    self.save_settings()
-                elif not messagebox.askyesno(
-                        "Affiche non enregistrée",
-                        "Aucun dossier choisi : continuer sans télécharger l'affiche ?"):
-                    return
-
-            dossier_bande_annonce = ""
-            if champs.get("bande_annonce"):
-                dossier_bande_annonce = filedialog.askdirectory(
-                    title="Où enregistrer la BANDE-ANNONCE ?",
-                    initialdir=getattr(self, "_dernier_dossier_bandes_annonces", "") or None)
-                if dossier_bande_annonce:
-                    self._dernier_dossier_bandes_annonces = dossier_bande_annonce
-                    self.save_settings()
-                elif not messagebox.askyesno(
-                        "Bande-annonce non enregistrée",
-                        "Aucun dossier choisi : continuer sans télécharger la bande-annonce ?"):
-                    return
 
             try:
                 win.valider_btn.configure(state="disabled", text="⏳ Téléchargement…")
@@ -14634,25 +16191,50 @@ try:
                         champs2["affiche"] == getattr(win, "_sim_cache_affiche_url", None) and
                         os.path.isfile(getattr(win, "_sim_cache_affiche_path", "") or "")
                     )
-                    _cache_ba = (
-                        champs2.get("bande_annonce") and
-                        champs2["bande_annonce"] == getattr(win, "_sim_cache_ba_url", None) and
-                        os.path.isfile(getattr(win, "_sim_cache_ba_path", "") or "")
-                    )
+                    # Clip vidéo : fichiers nommés « Chanson (année) Artiste ».
+                    _suffixe_clip = self._musique_artiste_principal(champs2) if _est_clip else ""
                     champs2["affiche_locale"] = ""
                     if champs2.get("affiche") and dossier_affiche:
                         champs2["affiche_locale"], err = self._telecharger_affiche_choisie(
                             champs2["titre"], champs2["annee"], champs2["affiche"], dossier_affiche,
-                            chemin_local_existant=(win._sim_cache_affiche_path if _cache_affiche else ""))
+                            chemin_local_existant=(win._sim_cache_affiche_path if _cache_affiche else ""),
+                            suffixe=_suffixe_clip)
+                        if err:
+                            erreurs.append(err)
+                    champs2["photo_locale"] = ""
+                    if champs2.get("photo") and dossier_affiche:
+                        _artiste_photo = self._musique_artiste_principal(champs2) or "artiste"
+                        champs2["photo_locale"], err = self._telecharger_affiche_choisie(
+                            f"Photo {_artiste_photo}", "", champs2["photo"], dossier_affiche)
                         if err:
                             erreurs.append(err)
                     champs2["bande_annonce_locale"] = ""
-                    if champs2.get("bande_annonce") and dossier_bande_annonce:
-                        champs2["bande_annonce_locale"], err = self._telecharger_bande_annonce_video(
-                            champs2["titre"], champs2["annee"], champs2["bande_annonce"], dossier_bande_annonce,
-                            chemin_local_existant=(win._sim_cache_ba_path if _cache_ba else ""))
-                        if err:
-                            erreurs.append(err)
+                    # Clip vidéo : on télécharge d'abord la VERSION REMASTÉRISÉE ; si elle échoue, le
+                    # clip d'origine prend le relais (et un avertissement l'indique).
+                    _sources_clip = []
+                    for _u in ((champs2.get("remaster") if _est_clip else ""), champs2.get("bande_annonce"),
+                               (getattr(win, "_clip_origine", "") if _est_clip else "")):
+                        if _u and _u not in _sources_clip:
+                            _sources_clip.append(_u)
+                    if _sources_clip and dossier_bande_annonce:
+                        _errs_clip = []
+                        for _k, _u in enumerate(_sources_clip):
+                            _en_cache = bool(_u == getattr(win, "_sim_cache_ba_url", None)
+                                             and os.path.isfile(getattr(win, "_sim_cache_ba_path", "") or ""))
+                            _loc, _err = self._telecharger_bande_annonce_video(
+                                champs2["titre"], champs2["annee"], _u, dossier_bande_annonce,
+                                chemin_local_existant=(win._sim_cache_ba_path if _en_cache else ""),
+                                suffixe=_suffixe_clip)
+                            if _loc:
+                                champs2["bande_annonce_locale"] = _loc
+                                if _k > 0 and _errs_clip:
+                                    erreurs.append("La version remastérisée n'a pas pu être téléchargée "
+                                                   f"({_errs_clip[0].splitlines()[0]}) : le clip d'origine "
+                                                   "a été enregistré à la place.")
+                                break
+                            _errs_clip.append(_err or "échec du téléchargement")
+                        else:
+                            erreurs.extend(_errs_clip)
                     ok, msg = self._ecrire_completion_dans_tableur(
                         champs2, chemin_tableur,
                         titre_recherche=_titre_recherche, annee_recherche=_annee_recherche)
@@ -14867,7 +16449,7 @@ try:
 
             threading.Thread(target=run, daemon=True).start()
 
-        def _chercher_titre_proche_tableur(self, titre):
+        def _chercher_titre_proche_tableur(self, titre, path=None):
             """Compare un titre au contenu du tableur pour éviter les
             doublons : renvoie {"exact": True, ...} si le titre y figure déjà
             à l'identique (dans ce cas, valider mettra normalement à jour
@@ -14875,7 +16457,7 @@ try:
             un titre très proche mais différent existe (doublon probable, à
             confirmer par l'utilisateur), ou None si rien de comparable
             n'est trouvé (ou si aucun tableur n'est configuré)."""
-            path = getattr(self, "_tableur_path", None)
+            path = path or getattr(self, "_tableur_path", None)
             if not path or not os.path.isfile(path):
                 return None
             try:
@@ -15128,6 +16710,14 @@ try:
             # stocké : la bande-annonce se retrouve désormais directement,
             # en hyperlien, dans sa propre colonne (voir plus bas).
             col8_valeur = (champs.get("renseignements") or "").strip()
+            # Catégorie « Clip vidéo » : le lien de la version remastérisée est ajouté au texte
+            # de la 8ème colonne (sans doublon si la ligne le contient déjà).
+            _remaster = (champs.get("remaster") or "").strip()
+            if _remaster and _remaster not in col8_valeur:
+                col8_valeur = (col8_valeur + " | " if col8_valeur else "") + f"Version remastérisée : {_remaster}"
+            # Photo emblématique : hyperlien local dans une 13ème colonne (créée seulement si besoin).
+            photo_locale = (champs.get("photo_locale") or "").strip()
+            _est_clip_tab = (champs.get("categorie") or "").strip().casefold() == "clip vidéo"
             _nom_base = (
                 f"{(champs.get('titre') or '').strip()} ({(champs.get('annee') or '').strip()})"
                 if (champs.get("annee") or "").strip()
@@ -15216,7 +16806,8 @@ try:
                         [idx for idx, key in col_map if (champs.get(key) or "").strip()] +
                         ([7] if col8_valeur else []) +
                         ([9] if affiche_locale else []) +
-                        ([10] if ba_locale else []) + [-1])
+                        ([10] if ba_locale else []) +
+                        ([12] if photo_locale else []) + [-1])
                     if idx_max_utile >= len(best_cells):
                         for _ in range(idx_max_utile + 1 - len(best_cells)):
                             best_row.addElement(TableCell(valuetype="string"))
@@ -15236,9 +16827,14 @@ try:
                     if col8_valeur and len(best_cells) > 7:
                         _set_cell_text(best_cells[7], col8_valeur)
                     if affiche_locale and len(best_cells) > 9:
-                        _set_cell_hyperlink(best_cells[9], affiche_locale, f"{_nom_base}.jpg")
+                        _set_cell_hyperlink(best_cells[9], affiche_locale,
+                                            os.path.basename(affiche_locale) if _est_clip_tab else f"{_nom_base}.jpg")
                     if ba_locale and len(best_cells) > 10:
-                        _set_cell_hyperlink(best_cells[10], ba_locale, f"{_nom_base}.mp4")
+                        _set_cell_hyperlink(best_cells[10], ba_locale,
+                                            os.path.basename(ba_locale) if _est_clip_tab
+                                            else f"{_nom_base}{os.path.splitext(ba_locale)[1] or '.mp4'}")
+                    if photo_locale and len(best_cells) > 12:
+                        _set_cell_hyperlink(best_cells[12], photo_locale, os.path.basename(photo_locale))
                     numero_ligne = self._numero_ligne_ods(sheets[0], best_row)
                     message = f"ligne existante mise à jour (ligne {numero_ligne})"
                 else:
@@ -15264,6 +16860,8 @@ try:
                                champs["personnes"], champs["type"], champs["realisateur"],
                                champs["duree"], col8_valeur, "", "",
                                "", champs.get("categorie", "")]
+                    if photo_locale:
+                        valeurs.append("")  # 13ème colonne : photo emblématique (clip vidéo)
                     if row_reutilisable is not None:
                         # Ligne déjà présente (vide, isolée) : ses cellules
                         # existantes peuvent très bien être un UNIQUE bloc
@@ -15292,9 +16890,14 @@ try:
                     # lignes remplies à la main.
                     _cells_nv = self._expand_ods_cells(new_row.getElementsByType(TableCell))
                     if affiche_locale and len(_cells_nv) > 9:
-                        _set_cell_hyperlink(_cells_nv[9], affiche_locale, f"{_nom_base}.jpg")
+                        _set_cell_hyperlink(_cells_nv[9], affiche_locale,
+                                            os.path.basename(affiche_locale) if _est_clip_tab else f"{_nom_base}.jpg")
                     if ba_locale and len(_cells_nv) > 10:
-                        _set_cell_hyperlink(_cells_nv[10], ba_locale, f"{_nom_base}.mp4")
+                        _set_cell_hyperlink(_cells_nv[10], ba_locale,
+                                            os.path.basename(ba_locale) if _est_clip_tab
+                                            else f"{_nom_base}{os.path.splitext(ba_locale)[1] or '.mp4'}")
+                    if photo_locale and len(_cells_nv) > 12:
+                        _set_cell_hyperlink(_cells_nv[12], photo_locale, os.path.basename(photo_locale))
                     if row_reutilisable is None:
                         if bloc_a_reduire is not None:
                             # La 1ère ligne vide trouvée fait partie d'un
@@ -17900,7 +19503,7 @@ try:
                 if is_playing:
                     print(f"[TableurSearch][TRACE] _pause_info_media: lecture active → pause VLC — win={id(win)}")
                     try:
-                        vp.pause()
+                        vp.set_pause(1)   # pause explicite (pause() basculerait)
                     except Exception as ex:
                         print(f"[TableurSearch][TRACE] _pause_info_media: erreur VLC pause : {type(ex).__name__}: {ex}")
                 else:
@@ -17913,18 +19516,28 @@ try:
             # fiche précédente qu'on ne fait que masquer, pas détruire).
             win._citron_stop_media = _pause_info_media
 
+            closing = [False]   # passe à True quand le lecteur vidéo est libéré
+
             def _stop_info_media():
                 # Arrête ET LIBÈRE la vidéo résumé (🎞) ET la narration.
                 # N'est sûr à appeler que juste avant de détruire la fenêtre
                 # elle-même (voir _save_info_geo ci-dessous) — jamais quand
                 # la fenêtre reste vivante, auquel cas _pause_info_media
                 # ci-dessus doit être utilisée à la place.
+                closing[0] = True      # plus aucun appel VLC différé après ce point
                 try:
                     vp = vid_player_ref[0]
                     if vp:
+                        vid_player_ref[0] = None   # personne d'autre ne touche au lecteur
                         vp.stop()
+                        try:
+                            # Détache la sortie vidéo de la fenêtre Tk AVANT de
+                            # libérer/détruire : évite que VLC dessine dans un
+                            # canevas en cours de destruction.
+                            vp.set_hwnd(0)
+                        except Exception:
+                            pass
                         vp.release()
-                        vid_player_ref[0] = None
                 except Exception:
                     pass
                 try:
@@ -18563,23 +20176,100 @@ try:
 
                     play_btn_ref = [None]
 
+                    # ── Lecture : ne JAMAIS démarrer sans demande de l'utilisateur ──
+                    # vp.pause() de VLC BASCULE (lecture <-> pause) au lieu de
+                    # forcer la pause : selon le timing (média encore en
+                    # ouverture, deux « Map » rapprochés, pause différée qui
+                    # arrive après une autre pause…), l'appel REDÉMARRAIT la
+                    # lecture toute seule. On utilise donc set_pause(1), qui
+                    # est idempotent, et on vérifie l'état réel avant de
+                    # considérer la vidéo comme « en pause ».
+                    want_play = [False]   # l'utilisateur a-t-il demandé la lecture ?
+                    gen = [0]             # invalide les vérifications différées obsolètes
+
+                    def _force_pause():
+                        if closing[0]:
+                            return
+                        try:
+                            vp.set_pause(1)
+                        except Exception:
+                            pass
+                        if play_btn_ref[0]:
+                            try:
+                                play_btn_ref[0].configure(text="▶")
+                            except Exception:
+                                pass
+
+                    def _show_first_frame():
+                        """Affiche la 1re image puis met en pause (jamais de lecture seule)."""
+                        gen[0] += 1
+                        g = gen[0]
+                        want_play[0] = False
+                        try:
+                            vp.set_hwnd(vid_canvas.winfo_id())
+                            vp.set_media(vid_instance.media_new(vid_path))
+                            vp.play()
+                        except Exception:
+                            return
+                        t0 = time.time()
+
+                        def _garde():
+                            # Vérification de sécurité : si la lecture est repartie
+                            # sans demande de l'utilisateur, on la remet en pause.
+                            try:
+                                if (not closing[0] and win.winfo_exists() and gen[0] == g
+                                        and not want_play[0]
+                                        and vp.get_state() == vlc.State.Playing):
+                                    _force_pause()
+                            except Exception:
+                                pass
+
+                        def _poll():
+                            try:
+                                if (closing[0] or not win.winfo_exists()
+                                        or gen[0] != g or want_play[0]):
+                                    return
+                                st = vp.get_state()
+                            except Exception:
+                                return
+                            if st == vlc.State.Playing:
+                                _force_pause()
+                                win.after(400, _garde)
+                                win.after(1500, _garde)
+                                return
+                            if st in (vlc.State.Ended, vlc.State.Error):
+                                return
+                            if time.time() - t0 > 8:     # média trop lent : on force la pause
+                                _force_pause()
+                                win.after(1500, _garde)
+                                return
+                            win.after(40, _poll)
+
+                        win.after(40, _poll)
+
                     def _vid_stop():
-                        vp.stop()
-                        vm2 = vid_instance.media_new(vid_path)
-                        vp.set_media(vm2)
-                        hwnd = vid_canvas.winfo_id()
-                        vp.set_hwnd(hwnd)
-                        vp.play()
-                        win.after(200, vp.pause)
+                        try:
+                            vp.stop()
+                        except Exception:
+                            pass
+                        _show_first_frame()
                         if play_btn_ref[0]:
                             play_btn_ref[0].configure(text="▶")
 
                     def _vid_toggle():
-                        st = vp.get_state()
+                        if closing[0]:
+                            return
+                        try:
+                            st = vp.get_state()
+                        except Exception:
+                            return
                         if st == vlc.State.Playing:
-                            vp.pause()
-                            if play_btn_ref[0]: play_btn_ref[0].configure(text="▶")
+                            gen[0] += 1
+                            want_play[0] = False
+                            _force_pause()
                         else:
+                            gen[0] += 1          # annule toute mise en pause différée
+                            want_play[0] = True
                             if st in (vlc.State.Ended, vlc.State.Stopped):
                                 vm3 = vid_instance.media_new(vid_path)
                                 vp.set_media(vm3)
@@ -18606,21 +20296,26 @@ try:
                     ctk.CTkLabel(vbtn_frame, text="").pack(side="left", expand=True)
 
                     # Attacher VLC et afficher première image en pause
+                    attached = [False]
+
                     def _attach(event=None):
-                        vp.set_hwnd(vid_canvas.winfo_id())
-                        vm0 = vid_instance.media_new(vid_path)
-                        vp.set_media(vm0)
-                        vp.play()
-                        win.after(300, lambda: (vp.pause(),
-                                                play_btn_ref[0].configure(text="▶")
-                                                if play_btn_ref[0] else None))
+                        # <Map> peut se produire plusieurs fois (fenêtre masquée
+                        # puis ré-affichée, redimensionnée…) : on n'initialise la
+                        # vidéo qu'UNE fois, sinon chaque <Map> la relançait.
+                        if attached[0]:
+                            return
+                        attached[0] = True
+                        _show_first_frame()
                     vid_canvas.bind("<Map>", _attach)
 
                     # Retour en pause à la fin (point 2)
                     def _check_end():
-                        if not win.winfo_exists(): return
-                        if vp.get_state() == vlc.State.Ended:
-                            _vid_stop()
+                        try:
+                            if closing[0] or not win.winfo_exists(): return
+                            if vp.get_state() == vlc.State.Ended:
+                                _vid_stop()
+                        except Exception:
+                            return          # lecteur libéré : on arrête la surveillance
                         win.after(800, _check_end)
                     win.after(800, _check_end)
 
