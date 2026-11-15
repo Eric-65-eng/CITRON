@@ -1,6 +1,6 @@
 {
-    "version":  "9.8.1",
-    "url":  "https://github.com/",
-    "notes":  "Amméllioration de la recherche plus divers.",
-    "sha256":  "da5024256a5919c4cdab3530d474cc9e1175fab371ab5272f9d4d71a8fd684f3"
+    "version":  "9.8.2",
+    "url":  "https://raw.githubusercontent.com/Eric-65-eng/citron/main/Citron.py",
+    "notes":  "Upgrade tout azimuth de Citron",
+    "sha256":  "c8406cc7428da22696ba1859b693ff3f4fbeed3c6200e0d8dca4ef64540766ac"
 }
